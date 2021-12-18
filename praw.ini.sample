@@ -1,6 +1,11 @@
+# This file needs to be placed on the project's working directory
+# and have the ".sample" extension removed
+
 # Define new site (inherits from DEFAULT) for this app
-# First register for Reddit API use on https://www.reddit.com/wiki/api
-# Then, see "developed applications" in https://www.reddit.com/prefs/apps
+# To get the following credentials, follow the procedure:
+# 1. Sign up for Reddit API use and accept terms & conditions at https://www.reddit.com/wiki/api
+# 2. see "developed applications" at https://www.reddit.com/prefs/apps and create a new script application.
+#       "about url" can be left empty and "redirect uri" can simply be "http://localhost:8080".
 [wsb]
 
 # A unique description of your application.
