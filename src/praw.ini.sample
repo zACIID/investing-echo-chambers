@@ -1,0 +1,25 @@
+# Define new site (inherits from DEFAULT) for this app
+# First register for Reddit API use on https://www.reddit.com/wiki/api
+# Then, see "developed applications" in https://www.reddit.com/prefs/apps
+[wsb]
+
+# A unique description of your application.
+# The following format is recommended according to Reddit’s API Rules:
+# <platform>:<app ID>:<version string> (by u/<reddit username>).
+user_agent=
+
+# The client ID is the 14-character string listed just under “personal use script”
+# for the desired developed application
+client_id=
+
+# The client secret is at least a 27-character string listed adjacent
+# to "secret" for the application.
+client_secret=
+
+# Credentials for reddit account
+password=
+username=
+
+# PRAW will wait for ratelimit_seconds + 1 before raising a timeout exception.
+# 60 is a good value since the official Reddit API docs say that you can make max 60 requests/min
+ratelimit_seconds=60
