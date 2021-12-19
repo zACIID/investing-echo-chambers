@@ -1,8 +1,14 @@
 import praw
 import praw.models
 import pandas as pd
+import re
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from prawcore import Requestor
 from datetime import datetime, date, timedelta
+
+# Needed for vader sentiment analyzer
+nltk.download("vader_lexicon")
 
 
 class LoggingRequestor(Requestor):
@@ -27,6 +33,7 @@ NO_USER = "N/A"  # used in the responding to column of submission records
 COMMENT_COL = "comment"
 AUTHOR_COL = "author"
 RESPONDING_TO_COL = "responding_to"
+SENTIMENT_COL = "sentiment_score"
 
 # Get data from up to two months ago
 TWO_MONTHS_AGO = date.today() - timedelta(days=60)
@@ -47,7 +54,9 @@ def main():
     wsb_data.to_csv(f"{OUT_FOLDER}/wsb-data-{datetime.now()}.csv")
 
     # Calculate and save user sentiment data
-    user_sentiment_data = xxx
+    user_sentiment_data = get_user_sentiment(wsb_data, COMMENT_COL)
+
+    pass
 
 
 def get_comment_data(subreddit: praw.models.Subreddit) -> pd.DataFrame:
@@ -80,13 +89,19 @@ def get_comment_data(subreddit: praw.models.Subreddit) -> pd.DataFrame:
 # una che raggruppa commenti per autore presenti nel submission df e calcola sentiment
 
 
-def fetch_data_from_submission(submission: praw.models.Submission) -> pd.DataFrame:
+def fetch_data_from_submission(submission: praw.models.Submission,
+                               author_col: str, comment_col: str,
+                               responding_to_col: str) -> pd.DataFrame:
     """
     Fetch all the comments from a given submission and return a dataframe containing said comments.
     Title + selftext + author of the provided submission are treated as a comment in response to no user.
 
-    :param submission:
-    :return: dataframe containing the following columns: author, comment, responding_to
+    :param submission: reddit submission to extract comments from
+    :param author_col: name of the author column of the returned dataframe
+    :param comment_col: name of the comment texts column of the returned dataframe
+    :param responding_to_col: name of the column of the returned dataframe that contains the user
+            to which a certain comment is responding
+    :return: dataframe containing comment data
     """
 
     # Build the dataframe containing the data fetched from the submissions
@@ -123,6 +138,7 @@ def fetch_data_from_submission(submission: praw.models.Submission) -> pd.DataFra
     # See https://praw.readthedocs.io/en/latest/tutorials/comments.html for more info
     submission.comments.replace_more(limit=None)
 
+    # tot_comments might not be exact because it also counts deleted comments, blocked comments, etc
     comment_counter = 0
     tot_comments = submission.num_comments
     for c in submission.comments.list():
@@ -146,6 +162,58 @@ def fetch_data_from_submission(submission: praw.models.Submission) -> pd.DataFra
     df_data = {AUTHOR_COL: authors, COMMENT_COL: comments,
                RESPONDING_TO_COL: [comment_authors[p_id] for p_id in parent_ids]}
     return pd.DataFrame(data=df_data)
+
+
+def get_user_sentiment(comment_data: pd.DataFrame,
+                       author_col: str, comment_col: str,
+                       sentiment_col: str) -> pd.DataFrame:
+    """
+    Calculates the sentiment of users based on their comments.
+    Returns a dataframe containing all user's sentiment data.
+    :param comment_data: dataframe containing comment data (authors, comment texts)
+    :param author_col: name of the column in the provided dataframe that contains
+            the authors of the comments
+    :param comment_col: name of the column in the provided dataframe that contains
+            the actual comment text
+    :return: pandas dataframe containing a "user" column and a "sentiment" column
+    """
+
+    # https://github.com/cjhutto/vaderSentiment#resources-and-dataset-descriptions
+    # positive sentiment: compound score >= 0.05
+    # neutral sentiment: (compound score > -0.05) and (compound score < 0.05)
+    # negative sentiment: compound score <= -0.05
+
+    sentiment_analyzer = SentimentIntensityAnalyzer()
+    data = comment_data.copy()
+
+    # Calculate sentiment score for each comment
+    # #only compound score is necessary because it sums up neu, pos and neg scores.
+    text_data = preprocess_comments(data[comment_col])
+    data[sentiment_col] = text_data.apply(lambda x: (sentiment_analyzer.polarity_scores(x))["compound"])
+
+    # TODO prendere solo colonna autori e sentiment e ritornare df
+    user_sentiment = data.groupby(by=[author_col], as_index=False).mean()
+
+
+
+
+def preprocess_comments(comments: pd.Series) -> pd.Series:
+    # Set everything to lower case to make comparisons easier
+    comments = comments.str.lower()
+
+    # Remove URLS TODO risolvere url e analizzare testo?
+    comments = comments.apply(lambda x: re.sub(r"http\S+", "", x))
+
+    # Remove all the special characters (keep only word characters)
+    comments = comments.apply(lambda x: ' '.join(re.findall(r'\w+', x)))
+
+    # remove all single characters
+    comments = comments.apply(lambda x: re.sub(r'\s+[a-zA-Z]\s+', '', x))
+
+    # Substituting multiple spaces with single space
+    comments = comments.apply(lambda x: re.sub(r'\s+', ' ', x, flags=re.IGNORECASE))
+
+    return comments
 
 
 if __name__ == "__main__":
