@@ -63,16 +63,18 @@ def main():
     # Fetch and save comment data
     wsb_data = get_comment_data(r_wsb)
 
-    print("--------- Saving r/wsb comments into csv... ---------")
-    wsb_data.to_csv(f"{OUT_FOLDER}/wsb-2m-data-{1}.csv")
+    if len(wsb_data) > 0:
+        print("--------- Saving r/wsb comments into csv... ---------")
+        wsb_data.to_csv(f"{OUT_FOLDER}/wsb-2m-data-{date.today()}.csv")
 
     print("--------- Calculating r/wsb users' sentiment... ---------")
     # Calculate and save user sentiment data
     user_sentiment_data = get_user_sentiment(wsb_data, author_col=AUTHOR_COL, comment_col=COMMENT_COL,
                                              user_col=USER_COL, sentiment_col=SENTIMENT_COL)
 
-    print("--------- Saving r/wsb users' sentiment into csv... ---------")
-    user_sentiment_data.to_csv(f"{OUT_FOLDER}/wsb-2m-user-sentiment-{1}")
+    if len(user_sentiment_data) > 0:
+        print("--------- Saving r/wsb users' sentiment into csv... ---------")
+        user_sentiment_data.to_csv(f"{OUT_FOLDER}/wsb-2m-user-sentiment-{date.today()}.csv")
 
     print("--------- Completed ---------")
 
@@ -156,14 +158,14 @@ def fetch_data_from_submission(submission: praw.models.Submission,
     print(f"(Date interval: {TWO_MONTHS_AGO} - {date.today()})")
 
     # Treat submission as if it was a regular comment
-    sub_author_id = get_author_id_safe(submission)
-    authors.append(sub_author_id)
+    sub_author = get_author_safe(submission)
+    authors.append(sub_author)
 
     comments.append(f"{submission.title} - {submission.selftext}")
     responding_to.append(NO_USER)  # Submission is in response to no one
 
     sub_id = remove_prefixes(submission.id)
-    comment_authors[sub_id] = sub_author_id
+    comment_authors[sub_id] = sub_author
 
     # Submission is the root so it has no parent.
     # Set the parent to itself to avoid errors when converting
@@ -171,15 +173,16 @@ def fetch_data_from_submission(submission: praw.models.Submission,
     parent_ids.append(sub_id)
 
     # Using replace_more is like pressing an all the buttons that say "load more comments"
-    # With the limit set to None, it tells praw to basically fetch all the comments, since,
-    # by default, not all of them are loaded
+    # With the limit set to None, it tells praw to basically press all the "load more" buttons
+    # that load at least _threshold_ comments
     # See https://praw.readthedocs.io/en/latest/tutorials/comments.html for more info
-    submission.comments.replace_more(limit=None)
+    submission.comments.replace_more(limit=None, threshold=25)
 
     # tot_comments might not be exact because it also counts deleted comments, blocked comments, etc
     comment_counter = 0
     tot_comments = submission.num_comments
-    for c in submission.comments.list():
+    comments_iterator = submission.comments.list()
+    for c in comments_iterator:
         # Progress logging
         comment_counter += 1
         progress_pct = round(((comment_counter / tot_comments) * 100))
@@ -187,8 +190,8 @@ def fetch_data_from_submission(submission: praw.models.Submission,
 
         # Add relevant comment data to the lists
         # Author might be deleted, in which case it is None
-        author_id = get_author_id_safe(c)
-        authors.append(author_id)
+        author = get_author_safe(c)
+        authors.append(author)
 
         comments.append(c.body)
 
@@ -198,7 +201,7 @@ def fetch_data_from_submission(submission: praw.models.Submission,
         parent_ids.append(parent_id)
 
         c_id = remove_prefixes(c.id)
-        comment_authors[c_id] = author_id
+        comment_authors[c_id] = author
 
     try:
         df_data = {author_col: authors, comment_col: comments,
@@ -208,18 +211,17 @@ def fetch_data_from_submission(submission: praw.models.Submission,
     return pd.DataFrame(data=df_data)
 
 
-def get_author_id_safe(praw_obj) -> str:
+def get_author_safe(praw_obj) -> str:
     """
     Function that handles the case where the author of something (comment, submission, etc.)
     has been deleted, in which case it is represented as None by PRAW.
-    Returns a string id, different from None, and net of reddit api prefixes.
     :param praw_obj: praw object such as comment or submission
-    :return: author id or NO_USER
+    :return: author's username or NO_USER
     """
     if praw_obj.author is None:
         return NO_USER
     else:
-        return remove_prefixes(praw_obj.author.id)
+        return praw_obj.author
 
 
 def remove_prefixes(obj_id: str) -> str:
@@ -301,5 +303,40 @@ def preprocess_comments(comments: pd.Series) -> pd.Series:
     return comments
 
 
+def test_main():
+    # some settings (including oauth) imported from praw.ini
+    reddit = praw.Reddit(site_name="wsb", requestor_class=LoggingRequestor)
+    r_wsb = reddit.subreddit("wallstreetbets")
+
+    print("----------- Fetching submissions -----------")
+    counter = 0
+    submissions_iterator = r_wsb.new(limit=None)
+    for submission in submissions_iterator:
+        counter += 1
+        print(f"---------- Submission #{counter} ----------")
+        print(submission.title)
+        print(submission.selftext)
+        print(submission.created_utc)
+
+        print("----------- Fetching comments -----------")
+        counter_c = 0
+        submission.comments.replace_more(limit=0)
+        comments_iterator = submission.comments.list()
+        start_time = time.perf_counter()
+        for comment in comments_iterator:
+            curr_time = time.perf_counter()
+            counter_c += 1
+            print(f"Comment #{counter_c} - time: {curr_time - start_time}")
+            print(f"Autore: {comment.author}")
+            print(comment.id)
+            print(comment.parent_id)
+            #print(comment.body)
+
+            start_time = curr_time
+
+
 if __name__ == "__main__":
     main()
+    #test_main()
+
+
