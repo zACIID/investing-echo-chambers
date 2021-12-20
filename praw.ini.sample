@@ -30,3 +30,6 @@ username=
 # PRAW will wait for ratelimit_seconds + 1 before raising a timeout exception.
 # 60 is a good value since the official Reddit API docs say that you can make max 60 requests/min
 ratelimit_seconds=60
+
+# Timeout for requests to reddit in seconds
+timeout=16

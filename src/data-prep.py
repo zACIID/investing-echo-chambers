@@ -1,3 +1,6 @@
+import time
+import traceback
+
 import praw
 import praw.models
 import pandas as pd
@@ -12,6 +15,8 @@ nltk.download("vader_lexicon")
 
 
 class LoggingRequestor(Requestor):
+    prev_request_time = 0
+
     def request(self, *args, timeout=None, **kwargs):
         """
         Wrap the request method with logging capabilities.
@@ -19,6 +24,10 @@ class LoggingRequestor(Requestor):
         response = super().request(*args, **kwargs)
 
         print(f"Response from: {response.url}")
+
+        curr_time = time.perf_counter()
+        print(f"Time from previous request: {curr_time - self.prev_request_time}")
+        self.prev_request_time = curr_time
 
         return response
 
@@ -29,7 +38,7 @@ USER_PREFIX = "t2_"
 SUBMISSION_PREFIX = "t3_"
 
 # Dataframe constants
-NO_USER = "N/A"  # used in the responding to column of submission records
+NO_USER = "N/A"
 COMMENT_COL = "comment"
 AUTHOR_COL = "author"
 RESPONDING_TO_COL = "responding_to"
@@ -38,9 +47,34 @@ USER_COL = "user"
 SENTIMENT_COL = "sentiment_score"
 
 # Get data from up to two months ago
-TWO_MONTHS_AGO = date.today() - timedelta(days=60)
+TWO_MONTHS_AGO = date.today() - timedelta(days=1)
 THRESHOLD_DATE = TWO_MONTHS_AGO
 OUT_FOLDER = "./output"
+
+
+def main():
+    # some settings (including oauth) imported from praw.ini
+    reddit = praw.Reddit(site_name="wsb", requestor_class=LoggingRequestor)
+
+    print("--------- Retrieving r/wsb... ---------")
+    r_wsb = reddit.subreddit("wallstreetbets")
+
+    print("--------- Fetching r/wsb comments... ---------")
+    # Fetch and save comment data
+    wsb_data = get_comment_data(r_wsb)
+
+    print("--------- Saving r/wsb comments into csv... ---------")
+    wsb_data.to_csv(f"{OUT_FOLDER}/wsb-2m-data-{1}.csv")
+
+    print("--------- Calculating r/wsb users' sentiment... ---------")
+    # Calculate and save user sentiment data
+    user_sentiment_data = get_user_sentiment(wsb_data, author_col=AUTHOR_COL, comment_col=COMMENT_COL,
+                                             user_col=USER_COL, sentiment_col=SENTIMENT_COL)
+
+    print("--------- Saving r/wsb users' sentiment into csv... ---------")
+    user_sentiment_data.to_csv(f"{OUT_FOLDER}/wsb-2m-user-sentiment-{1}")
+
+    print("--------- Completed ---------")
 
 
 def get_comment_data(subreddit: praw.models.Subreddit) -> pd.DataFrame:
@@ -49,23 +83,35 @@ def get_comment_data(subreddit: praw.models.Subreddit) -> pd.DataFrame:
         # Create a submission iterator and get submissions from the past two months.
         # From those, extract the comments and put them into a dataframe
         submissions_iterator = subreddit.stream.submissions()
+        at_least_one = False
+        counter = 0
         for submission in submissions_iterator:
-            sub_date = datetime.utcfromtimestamp(submission.created_utc)
+            counter += 1
+            print(f"[Submission #{counter}]")
+            sub_date = datetime.utcfromtimestamp(submission.created_utc).date()
 
-            # TODO first test with 2 days ago to see if i'm doing stuff right
-            THRESHOLD_DATE = datetime.today() - timedelta(days=2)
-
+            # Fetch only submission within (after) the threshold date
             if sub_date > THRESHOLD_DATE:
                 sub_data = fetch_data_from_submission(submission,
                                                       author_col=AUTHOR_COL,
                                                       comment_col=COMMENT_COL,
                                                       responding_to_col=RESPONDING_TO_COL)
                 subreddit_data.append(sub_data)
+                at_least_one = True
             else:
-                # All the data has been fetched
-                break
-    except Exception as e:
-        print(e)
+                if not at_least_one:
+                    # Skip until you get a submission within the threshold date
+                    print("Skipping submission because it is out of date interval...")
+                    continue
+                else:
+                    # If at least one submission has been fetched, and we fall here,
+                    # it means the iterator has begun a new batch of submissions, which
+                    # we do not want since it means that all those submissions are going
+                    # to be beyond the threshold date
+                    break
+    except Exception as e:  # TODO debug
+        print("Error caught: ")
+        print(traceback.format_exc())
     finally:
         # Make sure to return all the data fetched to this point, so it
         # doesn't have to be downloaded again (takes a long time)
@@ -106,14 +152,23 @@ def fetch_data_from_submission(submission: praw.models.Submission,
     # Log some data to the console to keep track of progress
     unix_time_date = submission.created_utc
     creation_date = datetime.utcfromtimestamp(unix_time_date).date()
-    print(f"Fetching submission '{submission.id}' data, created at: {creation_date}")
+    print(f"Fetching submission '{submission.title}', created at: {creation_date}")
     print(f"(Date interval: {TWO_MONTHS_AGO} - {date.today()})")
 
     # Treat submission as if it was a regular comment
-    authors.append(submission.author.id)
+    sub_author_id = get_author_id_safe(submission)
+    authors.append(sub_author_id)
+
     comments.append(f"{submission.title} - {submission.selftext}")
     responding_to.append(NO_USER)  # Submission is in response to no one
-    comment_authors[submission.id] = submission.author.id
+
+    sub_id = remove_prefixes(submission.id)
+    comment_authors[sub_id] = sub_author_id
+
+    # Submission is the root so it has no parent.
+    # Set the parent to itself to avoid errors when converting
+    # from parent id to author id
+    parent_ids.append(sub_id)
 
     # Using replace_more is like pressing an all the buttons that say "load more comments"
     # With the limit set to None, it tells praw to basically fetch all the comments, since,
@@ -127,24 +182,57 @@ def fetch_data_from_submission(submission: praw.models.Submission,
     for c in submission.comments.list():
         # Progress logging
         comment_counter += 1
-        progress_pct = (comment_counter / tot_comments) * 100
-        print(f"Fetching comment #{comment_counter} of ~{tot_comments} [{progress_pct}%]")
+        progress_pct = round(((comment_counter / tot_comments) * 100))
+        print(f"Fetching comment #{comment_counter} of max {tot_comments} [{progress_pct}%]")
 
         # Add relevant comment data to the lists
-        author_id = c.author.id
+        # Author might be deleted, in which case it is None
+        author_id = get_author_id_safe(c)
         authors.append(author_id)
 
         comments.append(c.body)
 
         # Store data used to compute the "responding_to" column
         # If the comment is top level, the id in parent_id is the id of the submission
-        parent_id = c.parent_id if SUBMISSION_PREFIX not in c.parent_id else submission.author.id
+        parent_id = remove_prefixes(c.parent_id)
         parent_ids.append(parent_id)
-        comment_authors[c.id] = author_id
 
-    df_data = {author_col: authors, comment_col: comments,
-               responding_to_col: [comment_authors[p_id] for p_id in parent_ids]}
+        c_id = remove_prefixes(c.id)
+        comment_authors[c_id] = author_id
+
+    try:
+        df_data = {author_col: authors, comment_col: comments,
+                   responding_to_col: [comment_authors[p_id] for p_id in parent_ids]}
+    except Exception as e:  # TODO debug
+        raise e
     return pd.DataFrame(data=df_data)
+
+
+def get_author_id_safe(praw_obj) -> str:
+    """
+    Function that handles the case where the author of something (comment, submission, etc.)
+    has been deleted, in which case it is represented as None by PRAW.
+    Returns a string id, different from None, and net of reddit api prefixes.
+    :param praw_obj: praw object such as comment or submission
+    :return: author id or NO_USER
+    """
+    if praw_obj.author is None:
+        return NO_USER
+    else:
+        return remove_prefixes(praw_obj.author.id)
+
+
+def remove_prefixes(obj_id: str) -> str:
+    """
+    Used to extract the actual id, net of prefixes, from a given id string
+    :param obj_id: id of a praw object
+    :return: id, net of reddit api prefixes
+    """
+    temp = obj_id.replace(COMMENT_PREFIX, "")
+    temp = temp.replace(USER_PREFIX, "")
+    temp = temp.replace(SUBMISSION_PREFIX, "")
+
+    return temp
 
 
 def get_user_sentiment(comment_data: pd.DataFrame,
@@ -164,6 +252,10 @@ def get_user_sentiment(comment_data: pd.DataFrame,
             the sentiment score for each user
     :return: pandas dataframe containing user sentiment data
     """
+
+    if len(comment_data) == 0:
+        print("Comment data is an empty dataframe")
+        return pd.DataFrame()
 
     # https://github.com/cjhutto/vaderSentiment#resources-and-dataset-descriptions
     # positive sentiment: compound score >= 0.05
@@ -210,27 +302,4 @@ def preprocess_comments(comments: pd.Series) -> pd.Series:
 
 
 if __name__ == "__main__":
-    # some settings (including oauth) imported from praw.ini
-    reddit = praw.Reddit(site_name="wsb", requestor_class=LoggingRequestor,
-                         comment_kind=COMMENT_PREFIX, redditor_kind=USER_PREFIX,
-                         submission_kind=SUBMISSION_PREFIX)
-
-    print("--------- Retrieving r/wsb... ---------")
-    r_wsb = reddit.subreddit("wallstreetbets")
-
-    print("--------- Fetching r/wsb comments... ---------")
-    # Fetch and save comment data
-    wsb_data = get_comment_data(r_wsb)
-
-    print("--------- Saving r/wsb comments into csv... ---------")
-    wsb_data.to_csv(f"{OUT_FOLDER}/wsb-2m-data-{datetime.now()}.csv")
-
-    print("--------- Calculating r/wsb users' sentiment... ---------")
-    # Calculate and save user sentiment data
-    user_sentiment_data = get_user_sentiment(wsb_data, author_col=AUTHOR_COL, comment_col=COMMENT_COL,
-                                             user_col=USER_COL, sentiment_col=SENTIMENT_COL)
-
-    print("--------- Saving r/wsb users' sentiment into csv... ---------")
-    user_sentiment_data.to_csv(f"{OUT_FOLDER}/wsb-2m-user-sentiment-{datetime.now()}")
-
-    print("--------- Completed ---------")
+    main()
