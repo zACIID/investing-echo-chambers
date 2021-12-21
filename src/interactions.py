@@ -7,7 +7,7 @@ from praw.models import Submission, Comment
 from prawcore import Requestor
 from psaw import PushshiftAPI
 from datetime import datetime
-from constants import COMMENT_PREFIX, USER_PREFIX, SUBMISSION_PREFIX
+from src.constants import COMMENT_PREFIX, USER_PREFIX, SUBMISSION_PREFIX
 
 
 class LoggingRequestor(Requestor):
@@ -19,10 +19,11 @@ class LoggingRequestor(Requestor):
         """
         response = super().request(*args, **kwargs)
 
-        self._log_message(f"Response from: {response.url}")
+        print(f"Response from: {response.url}")
 
         curr_time = time.perf_counter()
-        self._log_message(f"Time from previous request: {curr_time - self.prev_request_time}")
+        elapsed_time = curr_time - self.prev_request_time
+        print(f"Time from previous request: {round(elapsed_time, 3)}s")
         self.prev_request_time = curr_time
 
         return response
@@ -151,8 +152,8 @@ class SubredditInteractions(object):
             If nothing is specified, nothing is logged.
         """
 
-        self._psaw = PushshiftAPI()
         self._reddit = Reddit(site_name=ini_site_name, requestor_class=LoggingRequestor)
+        self._psaw = PushshiftAPI(r=self._reddit)
         self._subreddit = self._reddit.subreddit(subreddit)
 
         self._date_before = date_before if date_before is not None else datetime.today()
@@ -188,8 +189,8 @@ class SubredditInteractions(object):
         # Query PSAW to get all the ids in the specified time interval
         # PSAW is needed because PRAW goes at maximum 1000 elements back in time,
         # while PSAW consults the pushshift.io database, which stores historical reddit data
-        ts_after = self._date_after.timestamp()
-        ts_before = self._date_before.timestamp()
+        ts_after = int(self._date_after.timestamp())
+        ts_before = int(self._date_before.timestamp())
         psaw_sub_generator = self._psaw.search_submissions(
             after=ts_after,
             before=ts_before,
@@ -198,10 +199,18 @@ class SubredditInteractions(object):
             limit=None  # get all the submissions in the specified timeframe
         )
 
-        # For each id, get the praw object for the submission,
+        # For each PSAW id, get the PRAW object for the submission,
         # which is easier to handle than PSAW raw data
         for psaw_sub in psaw_sub_generator:
-            submission_id = psaw_sub.d_['id']
+            submission_id = psaw_sub.id
+
+            # Skip submission if outside date range
+            # it can happen because they are fetched in batches
+            sub_date = datetime.utcfromtimestamp(psaw_sub.created_utc)
+            if sub_date <= self._date_after or sub_date >= self._date_before:
+                self._log_message("Skipping submission...")
+                continue
+
             yield self._reddit.submission(id=submission_id)
 
     def _fetch_data_from_submission(self, submission: Submission) -> list[Interaction]:
@@ -221,12 +230,12 @@ class SubredditInteractions(object):
 
         # Log some submission info to keep track of progress
         unix_time_date = submission.created_utc
-        creation_date = datetime.utcfromtimestamp(unix_time_date).date()
+        creation_date = datetime.utcfromtimestamp(unix_time_date)
         self._log_message(f"Fetching submission '{submission.title}', created at: {creation_date}")
         self._log_message(f"(Date interval: {self._date_after} - {self._date_before})")
 
         # The current submission is parent of its top-level comments
-        sub_id = extract_id_safe(submission.id)
+        sub_id = extract_id_safe(submission)
         ids_to_objects[sub_id] = submission
 
         # Using replace_more is like pressing an all the buttons that say "load more comments"

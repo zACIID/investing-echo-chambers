@@ -1,16 +1,20 @@
 import time
 import pandas as pd
+from pathlib import Path
 from datetime import datetime, date, timedelta
-from interactions import Interaction, SubredditInteractions
-from sentiment import get_user_sentiment_df
-from constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
+from src.interactions import Interaction, SubredditInteractions
+from src.sentiment import get_user_sentiment_df
+from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
 
 # Get data from up to two months ago
-FROM_DATE = datetime.today() - timedelta(days=1)
+DAYS_INTERVAL = 60
+FROM_DATE = datetime.today() - timedelta(days=DAYS_INTERVAL)
 TO_DATE = datetime.today()
 
+# Create directory if not exists
 OUT_FOLDER = "./output"
+Path(OUT_FOLDER).mkdir(parents=True, exist_ok=True)
 
 
 def main():

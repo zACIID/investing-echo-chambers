@@ -2,7 +2,7 @@ import re
 import pandas as pd
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from interactions import Interaction
+from src.interactions import Interaction
 
 # Needed for vader sentiment analyzer
 nltk.download("vader_lexicon")
@@ -31,7 +31,7 @@ def get_user_sentiment_df(interactions: list[Interaction],
         user_col: [i.user for i in interactions],
         text_col: [i.text_data for i in interactions]
     }
-    user_df = pd.Dataframe(data=user_data)
+    user_df = pd.DataFrame(data=user_data)
 
     # https://github.com/cjhutto/vaderSentiment#resources-and-dataset-descriptions
     # positive sentiment: compound score >= 0.05
