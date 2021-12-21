@@ -8,9 +8,8 @@ from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
 
 # Get data from up to two months ago
-DAYS_INTERVAL = 60
-FROM_DATE = datetime.today() - timedelta(days=DAYS_INTERVAL)
-TO_DATE = datetime.today()
+DAYS_INTERVAL = 1
+STARTING_DATE = datetime.today() - timedelta(days=DAYS_INTERVAL)
 
 # Create directory if not exists
 OUT_FOLDER = "./output"
@@ -18,35 +17,45 @@ Path(OUT_FOLDER).mkdir(parents=True, exist_ok=True)
 
 
 def main():
-    print("--------- Initializing r/wsb... ---------")
-    wsb = SubredditInteractions(subreddit="wallstreetbets", ini_site_name="wsb",
-                                date_after=FROM_DATE, date_before=TO_DATE,
-                                logger=print)
+    # To keep memory consumption low and possibly avoid losing
+    # a lot of data, divide the task in days and
+    # dump data into csv file after each day
+    for day in range(1, DAYS_INTERVAL+1):
+        day_info = f"[Day {day}]"
+        print(f"--------- {day_info} Initializing r/wsb... ---------")
 
-    print("--------- Fetching r/wsb interactions... ---------")
-    # Fetch and save comment data
-    wsb_interactions = wsb.fetch_interactions()
-    print("--------- r/wsb interactions fetched ---------")
+        to_date = STARTING_DATE + timedelta(days=day)
+        wsb = SubredditInteractions(subreddit="wallstreetbets", ini_site_name="wsb",
+                                    date_after=STARTING_DATE, date_before=to_date,
+                                    logger=print)
 
-    # Create and save interactions dataframe
-    interactions_df = get_interaction_df(interactions=wsb_interactions,
-                                         user_out_col=USER_COL,
-                                         text_out_col=TEXT_COL,
-                                         interacted_with_out_col=INTERACTED_WITH_COL)
-    if len(interactions_df) > 0:
-        print("--------- Saving r/wsb interactions into csv... ---------")
-        interactions_df.to_csv(f"{OUT_FOLDER}/wsb-interactions-{date.today()}.csv")
+        print(f"--------- {day_info} Fetching r/wsb interactions... ---------")
+        # Fetch and save comment data
+        wsb_interactions = wsb.fetch_interactions()
+        print(f"--------- {day_info} r/wsb interactions fetched ---------")
 
-    # Calculate and save user sentiment data
-    print("--------- Calculating r/wsb users' sentiment... ---------")
-    user_sentiment_df = get_user_sentiment_df(interactions=wsb_interactions,
-                                              user_out_col=USER_COL,
-                                              sentiment_out_col=SENTIMENT_COL)
-    if len(user_sentiment_df) > 0:
-        print("--------- Saving r/wsb users' sentiment into csv... ---------")
-        user_sentiment_df.to_csv(f"{OUT_FOLDER}/wsb-2m-user-sentiment-{date.today()}.csv")
+        # Create and save interactions dataframe
+        interactions_df = get_interaction_df(interactions=wsb_interactions,
+                                             user_out_col=USER_COL,
+                                             text_out_col=TEXT_COL,
+                                             interacted_with_out_col=INTERACTED_WITH_COL)
+        if len(interactions_df) > 0:
+            print(f"--------- {day_info} Saving r/wsb interactions into csv... ---------")
+            interactions_df.to_csv(f"{OUT_FOLDER}/wsb-interactions__{STARTING_DATE.date()}_{day}.csv")
 
-    print("--------- Completed ---------")
+        # Calculate and save user sentiment data
+        print(f"--------- {day_info} Calculating r/wsb users' sentiment... ---------")
+        user_sentiment_df = get_user_sentiment_df(interactions=wsb_interactions,
+                                                  user_out_col=USER_COL,
+                                                  sentiment_out_col=SENTIMENT_COL)
+        if len(user_sentiment_df) > 0:
+            print(f"--------- {day_info} Saving r/wsb users' sentiment into csv... ---------")
+            user_sentiment_df.to_csv(f"{OUT_FOLDER}/wsb-user-sentiment__{STARTING_DATE.date()}_{day}.csv")
+
+        print(f"--------- {day_info} Completed ---------")
+
+    print("__________________________________________________________________________________________________________")
+    print(f"Data for interval {STARTING_DATE} - {STARTING_DATE + timedelta(days=DAYS_INTERVAL)} successfully fetched.")
 
 
 def get_interaction_df(interactions: list[Interaction],
