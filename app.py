@@ -1,14 +1,14 @@
 import time
 import pandas as pd
 from pathlib import Path
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from src.interactions import Interaction, SubredditInteractions
 from src.sentiment import get_user_sentiment_df
 from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
 
 # Get data from up to two months ago
-DAYS_INTERVAL = 1
+DAYS_INTERVAL = 60
 STARTING_DATE = datetime.today() - timedelta(days=DAYS_INTERVAL)
 
 # Create directory if not exists
@@ -24,9 +24,10 @@ def main():
         day_info = f"[Day {day}]"
         print(f"--------- {day_info} Initializing r/wsb... ---------")
 
+        from_date = STARTING_DATE + timedelta(days=day-1)
         to_date = STARTING_DATE + timedelta(days=day)
         wsb = SubredditInteractions(subreddit="wallstreetbets", ini_site_name="wsb",
-                                    date_after=STARTING_DATE, date_before=to_date,
+                                    date_after=from_date, date_before=to_date,
                                     logger=print)
 
         print(f"--------- {day_info} Fetching r/wsb interactions... ---------")
@@ -41,7 +42,7 @@ def main():
                                              interacted_with_out_col=INTERACTED_WITH_COL)
         if len(interactions_df) > 0:
             print(f"--------- {day_info} Saving r/wsb interactions into csv... ---------")
-            interactions_df.to_csv(f"{OUT_FOLDER}/wsb-interactions__{STARTING_DATE.date()}_{day}.csv")
+            interactions_df.to_csv(f"{OUT_FOLDER}/wsb-interactions__{from_date.date()}_{to_date.date()}.csv")
 
         # Calculate and save user sentiment data
         print(f"--------- {day_info} Calculating r/wsb users' sentiment... ---------")
@@ -50,7 +51,7 @@ def main():
                                                   sentiment_out_col=SENTIMENT_COL)
         if len(user_sentiment_df) > 0:
             print(f"--------- {day_info} Saving r/wsb users' sentiment into csv... ---------")
-            user_sentiment_df.to_csv(f"{OUT_FOLDER}/wsb-user-sentiment__{STARTING_DATE.date()}_{day}.csv")
+            user_sentiment_df.to_csv(f"{OUT_FOLDER}/wsb-user-sentiment__{from_date.date()}_{to_date.date()}.csv")
 
         print(f"--------- {day_info} Completed ---------")
 
