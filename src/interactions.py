@@ -1,6 +1,6 @@
 import time
+import pandas as pd
 from typing import Union
-from abc import ABC
 from collections import Generator
 from praw import Reddit
 from praw.models import Submission, Comment
@@ -29,7 +29,7 @@ class LoggingRequestor(Requestor):
         return response
 
 
-class Interaction(ABC):
+class Interaction(object):
     """
     Abstract class representing an interaction between two users
     """
@@ -51,7 +51,7 @@ class SubmissionInteraction(Interaction):
         # Convert the author to string to get the username
         # without activating the lazy Redditor instance and causing
         # an api call
-        author = get_author_username_safe(submission)
+        author = _get_author_username_safe(submission)
 
         text_data = f"{submission.title} - {submission.selftext}"
 
@@ -66,15 +66,15 @@ class CommentInteraction(Interaction):
         # Convert the author to string to get the username
         # without activating the lazy Redditor instance and causing
         # an api call
-        author = get_author_username_safe(comment)
-        interacted_with = get_author_username_safe(parent)
+        author = _get_author_username_safe(comment)
+        interacted_with = _get_author_username_safe(parent)
 
         text_data = comment.body
 
         super(CommentInteraction, self).__init__(author, text_data, interacted_with)
 
 
-def extract_id_safe(praw_obj: Union[Comment, Submission]) -> str:
+def _extract_id_safe(praw_obj: Union[Comment, Submission]) -> str:
     """
     Used to extract the actual id, net of prefixes, from a given praw object.
     :param praw_obj: praw object representing either comment or submission
@@ -85,10 +85,10 @@ def extract_id_safe(praw_obj: Union[Comment, Submission]) -> str:
     obj_id = getattr(praw_obj, "id", "N/A")
 
     # Remove all the prefixes so that only the actual id remains
-    return remove_kind_prefixes(obj_id)
+    return _remove_kind_prefixes(obj_id)
 
 
-def extract_parent_id_safe(praw_obj: Union[Comment, Submission]) -> str:
+def _extract_parent_id_safe(praw_obj: Union[Comment, Submission]) -> str:
     """
     Used to extract the parent id, net of prefixes, from a given praw object.
     :param praw_obj: praw object representing either comment or submission
@@ -100,10 +100,10 @@ def extract_parent_id_safe(praw_obj: Union[Comment, Submission]) -> str:
     obj_id = getattr(praw_obj, "parent_id", "N/A")
 
     # Remove all the prefixes so that only the actual id remains
-    return remove_kind_prefixes(obj_id)
+    return _remove_kind_prefixes(obj_id)
 
 
-def remove_kind_prefixes(obj_id: str) -> str:
+def _remove_kind_prefixes(obj_id: str) -> str:
     """
     Removes the reddit api prefixes such as t1, t2, etc.
     from the given id string
@@ -117,7 +117,7 @@ def remove_kind_prefixes(obj_id: str) -> str:
     return actual_id
 
 
-def get_author_username_safe(praw_obj: Union[Comment, Submission]) -> str:
+def _get_author_username_safe(praw_obj: Union[Comment, Submission]) -> str:
     """
     Function that handles the case where the author of something (comment, submission, etc.)
     has been deleted, in which case it is represented as None by PRAW.
@@ -235,7 +235,7 @@ class SubredditInteractions(object):
         self._log_message(f"(Date interval: {self._date_after} - {self._date_before})")
 
         # The current submission is parent of its top-level comments
-        sub_id = extract_id_safe(submission)
+        sub_id = _extract_id_safe(submission)
         ids_to_objects[sub_id] = submission
 
         # Using replace_more is like pressing an all the buttons that say "load more comments"
@@ -261,12 +261,12 @@ class SubredditInteractions(object):
             fetched_comments.append(c)
 
             # Build the dictionary later used to go from parent_id to parent object
-            comment_id = extract_id_safe(c)
+            comment_id = _extract_id_safe(c)
             ids_to_objects[comment_id] = c
 
         # Retrieve the parent of the fetched comments and create the interactions
         for c in fetched_comments:
-            parent_id = extract_parent_id_safe(c)
+            parent_id = _extract_parent_id_safe(c)
             parent = ids_to_objects[parent_id]
 
             comm_interaction = CommentInteraction(c, parent)
@@ -281,3 +281,32 @@ class SubredditInteractions(object):
         """
         if self._logger is not None:
             self._logger(msg)
+
+
+def get_interaction_df(interactions: list[Interaction],
+                       user_out_col: str, text_out_col: str,
+                       interacted_with_out_col: str) -> pd.DataFrame:
+    """
+    Returns a dataframe based on the provided interactions.
+    :param interactions: list of user interactions
+    :param user_out_col: name of the column, in the output dataframe,
+        that contains all the authors of the fetched text
+    :param text_out_col: name of the column, in the output dataframe,
+        that contains all the comment and submission text
+    :param interacted_with_out_col: name of the column, in the output dataframe,
+        that contains the users that the fetched text was in response to.
+        For submissions, the user is treated as if it was responding to itself.
+    :return:
+    """
+
+    if len(interactions) == 0:
+        print("Interaction list is empty")
+        return pd.DataFrame()
+
+    interaction_data = {
+        user_out_col: [i.user for i in interactions],
+        text_out_col: [i.text_data for i in interactions],
+        interacted_with_out_col: [i.interacted_with for i in interactions]
+    }
+
+    return pd.DataFrame(data=interaction_data)
