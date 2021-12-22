@@ -7,8 +7,8 @@ from src.sentiment import get_user_sentiment_df, get_text_sentiment_df
 from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
 
-# Get data from up to two months ago
-DAYS_INTERVAL = 60
+# Get data from up to two one month and a half ago
+DAYS_INTERVAL = 60  # TODO make it so this parameter comes from a config file (or even both the starting and ending date)
 STARTING_DATE = datetime.today() - timedelta(days=DAYS_INTERVAL)
 
 # Output directories
@@ -48,7 +48,9 @@ def main():
         if len(interactions_df) > 0:
             print(f"--------- {day_info} Saving r/wsb interactions into csv... ---------")
             interactions_df.to_csv(
-                f"{INTERACTIONS_DAY_TO_DAY_FOLDER}/wsb-interactions__{from_date.date()}_{to_date.date()}.csv")
+                f"{INTERACTIONS_DAY_TO_DAY_FOLDER}/wsb-interactions__{from_date.date()}_{to_date.date()}.csv",
+                index=False
+            )
 
         # Calculate and save text sentiment data
         print(f"--------- {day_info} Calculating r/wsb text sentiment... ---------")
@@ -58,7 +60,9 @@ def main():
         if len(text_sentiment_df) > 0:
             print(f"--------- {day_info} Saving r/wsb text sentiment into csv... ---------")
             text_sentiment_df.to_csv(
-                f"{TEXT_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-text-sentiment__{from_date.date()}_{to_date.date()}.csv")
+                f"{TEXT_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-text-sentiment__{from_date.date()}_{to_date.date()}.csv",
+                index=False
+            )
 
         # Calculate and save user sentiment data
         print(f"--------- {day_info} Calculating r/wsb users' sentiment... ---------")
@@ -68,7 +72,9 @@ def main():
         if len(user_sentiment_df) > 0:
             print(f"--------- {day_info} Saving r/wsb users' sentiment into csv... ---------")
             user_sentiment_df.to_csv(
-                f"{USER_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-user-sentiment__{from_date.date()}_{to_date.date()}.csv")
+                f"{USER_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-user-sentiment__{from_date.date()}_{to_date.date()}.csv",
+                index=False
+            )
 
         print(f"--------- {day_info} Completed ---------")
 
@@ -82,7 +88,9 @@ def main():
 
         print("---------------- creating final user sentiment dataset ----------------")
         user_sentiment_final = append_stored_datasets(f"{USER_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-user-sentiment__*.csv")
-        user_sentiment_final = user_sentiment_final.groupby(by=[USER_COL]).mean()
+
+        # Recalculate average user sentiment
+        user_sentiment_final = user_sentiment_final.groupby(by=[USER_COL], as_index=False).mean()
         user_sentiment_final.to_csv(f"{OUT_FOLDER}/wsb-user-sentiment.csv", index=False)
 
     print("__________________________________________________________________________________________________________")
