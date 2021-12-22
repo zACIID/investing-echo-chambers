@@ -88,7 +88,7 @@ def _preprocess_text(text_data: pd.Series) -> pd.Series:
     # Remove all the special characters (keep only word characters)
     text_data = text_data.apply(lambda x: ' '.join(re.findall(r'\w+', x)))
 
-    # remove all single characters
+    # Replace all single characters with space (so words don't get glued together)
     text_data = text_data.apply(lambda x: re.sub(r'\s+[a-zA-Z]\s+', ' ', x))
 
     # Substituting multiple spaces with single space
