@@ -1,0 +1,216 @@
+---
+title: "Is r/wallstreetbets an echo-chamber?"
+author: "Pierluigi Marchioro"
+date: "21/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(ggraph)
+library(igraph)
+library(graphlayouts)
+```
+
+
+```{r plot_styling}
+edge_color <- "#cacac0"
+
+# Dark red, red, light red, light orange, light green, green, dark green
+bear_bull_color_scale <- c("#8a0007", "#d9000c", "#fa6b73", "#ffa500", "#add6a7", "#6db064", "#127a04")
+```
+
+
+
+# Load datasets
+
+```{r}
+# Col-names: user, text, interacted_with
+interactions <- fread("../datasets/wsb-interactions.csv", sep=",", header=TRUE)
+dim(interactions)
+head(interactions)
+```
+
+```{r}
+# Col-names: text, sentiment_score
+text.sentiment <- fread("../datasets/wsb-text-sentiment.csv", sep=",", header=TRUE)
+dim(text.sentiment)
+head(text.sentiment)
+```
+
+```{r}
+# Col-names: user, sentiment_score
+user.sentiment <- fread("../datasets/wsb-user-sentiment.csv", sep=",")
+dim(user.sentiment)
+head(user.sentiment)
+```
+
+## A little bit of pre-processing
+
+### Remove moderator bots
+
+```{r}
+# AutoModerator, VisualMod
+bot_mods <- c("VisualMod", "AutoModerator")
+
+interactions = interactions[!(user %in% bot_mods | interacted_with %in% bot_mods), ]
+dim(interactions)
+
+user.sentiment = user.sentiment[!(user %in% bot_mods), ]
+dim(user.sentiment)
+```
+
+### Drop data that is either empty or na
+
+```{r}
+interactions <- na.omit(interactions)
+interactions <- interactions[(user != "" & interacted_with != ""), ]
+
+text.sentiment <- na.omit(text.sentiment)
+text.sentiment <- text.sentiment[(text != ""), ]
+
+user.sentiment <- na.omit(user.sentiment)
+user.sentiment <- user.sentiment[(user != ""), ]
+```
+
+
+### Anonymize usernames
+
+```{r}
+
+```
+
+
+# Plot sentiment of all the text data extracted from comments and submissions
+
+```{r}
+
+```
+
+
+
+# Visualize Network
+
+## Prepare interactions data for igraph (first two columns define how edges are made)
+
+```{r}
+edges.dt <- interactions[, c("user", "interacted_with")]
+```
+
+## Create and plot network graph
+
+```{r}
+user.network <- graph_from_data_frame(edges.dt, directed=FALSE)
+
+# Remove multiple edges (one user may interact with another user more than once)
+user.network <- simplify(user.network)
+head(E(user.network))
+```
+
+```{r}
+# Plot network and color by sentiment
+
+# Set sentiment attribute in the vertexes
+sentiment.with_order <- user.sentiment[as.character(user) %in% as.character(V(user.network)$name)]
+sentiment.with_order <- sentiment.with_order[order(match(user, V(user.network)$name))]
+user.network <- set_vertex_attr(user.network, "sentiment", 
+                                index = V(user.network)[as.character(name) %in% as.character(sentiment.with_order$user)], 
+                                sentiment.with_order$sentiment_score)
+
+ggraph(user.network, layout="grid") + 
+  geom_edge_link(color=edge_color) +
+  geom_node_point(aes(color=sentiment)) +
+  scale_colour_gradientn(colors=bear_bull_color_scale)
+
+ggraph(user.network, layout="circle", order=order(V(user.network)$sentiment)) + 
+  geom_edge_link(color=edge_color) +
+  geom_node_point(aes(color=sentiment)) +
+  scale_colour_gradientn(colors=bear_bull_color_scale)
+```
+
+
+## Community Detection
+
+Good summary of various igraph algorithms:
+https://stackoverflow.com/questions/9471906/what-are-the-differences-between-community-detection-algorithms-in-igraph
+
+```{r}
+communities <- fastgreedy.community(user.network)
+V(user.network)$community <- communities$membership
+```
+
+### Calculate communities characteristics
+
+```{r}
+# Create a data.table that represents the user network's vertexes
+vertex_names <- V(user.network)$name
+vertex_sentiment <- V(user.network)$sentiment
+vertex_communities <- V(user.network)$community
+vertex.dt <- data.table(
+  name=vertex_names,
+  community=vertex_communities,
+  sentiment=vertex_sentiment
+)
+
+length(vertex_names)
+
+# Create a data.table of community edges from the user network vertexes
+community_interactions.dt <- merge.data.table(vertex.dt, edges.dt, by.x=c("name"), by.y="user")
+community_interactions.dt <- merge.data.table(vertex.dt, community_interactions.dt, by.x=c("name"), by.y="interacted_with")
+community_interactions.dt <- community_interactions.dt[, c("community.x", "community.y")]
+colnames(community_interactions.dt) <- c("from_community", "to_community")
+
+# Create data.table pairing communities with their size and sentiment
+communities.dt <- vertex.dt[, .(size=.N, sentiment=mean(sentiment)), by=c("community")]
+communities.dt <- unique(communities.dt[, c("community", "size", "sentiment")])
+dim(communities.dt)
+head(communities.dt)
+```
+
+### Create communities graph
+
+```{r}
+# Create communities graph
+communities.network <- graph_from_data_frame(community_interactions.dt, directed=FALSE)
+communities.network <- simplify(communities.network)
+
+# Need to order the communities before assigning attributes to vertexes,
+# else the values to assign "aren't aligned" with the vertexes they should go to
+comm.with_order <- communities.dt[as.character(community) %in% as.character(V(communities.network)$name)]
+comm.with_order <- comm.with_order[order(match(community, V(communities.network)$name))]
+
+# Assign size and sentiment attributes to network vertexes
+communities.network <- set_vertex_attr(communities.network, "size", 
+                                       index = V(communities.network)[as.character(name) %in% as.character(comm.with_order$community)], 
+                                       comm.with_order$size)
+communities.network <- set_vertex_attr(communities.network, "sentiment", 
+                                       index = V(communities.network)[as.character(name) %in% as.character(comm.with_order$community)], 
+                                       comm.with_order$sentiment)
+```
+
+### Plot communities graph
+
+```{r}
+# Actual plotting
+ggraph(communities.network, layout="kk") + 
+  geom_edge_link(color=edge_color) +
+  geom_node_point(aes(color=sentiment, size=size)) +
+    scale_colour_gradientn(colors=bear_bull_color_scale)
+
+ggraph(communities.network, layout="circle", order=order(V(communities.network)$sentiment)) + 
+  geom_edge_link(color=edge_color) +
+  geom_node_point(aes(color=sentiment, size=size)) +
+  scale_colour_gradientn(colors=bear_bull_color_scale)
+```
+## Communities Sentiment
+
+### Plot communities' sentiment
+
+```{r}
+# TODO prendi spunto da esempio echo chambers fatto in classe
+```
+
