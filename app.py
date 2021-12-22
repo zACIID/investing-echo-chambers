@@ -2,13 +2,13 @@ import glob
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
-from src.interactions import SubredditInteractions, get_interaction_df, Interaction
+from src.interactions import SubredditInteractions, get_interaction_df
 from src.sentiment import get_user_sentiment_df, get_text_sentiment_df
 from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
-
-# Get data from up to two one month and a half ago
-DAYS_INTERVAL = 60  # TODO make it so this parameter comes from a config file (or even both the starting and ending date)
+# TODO make it so this parameter comes from a config file (or even both the starting and ending date)
+# Get data from up to one month and a half ago
+DAYS_INTERVAL = 45
 STARTING_DATE = datetime.today() - timedelta(days=DAYS_INTERVAL)
 
 # Output directories
@@ -79,15 +79,15 @@ def main():
         print(f"--------- {day_info} Completed ---------")
 
         print("---------------- creating final interaction dataset ----------------")
-        interactions_final = append_stored_datasets(f"{INTERACTIONS_DAY_TO_DAY_FOLDER}/wsb-interactions__*.csv")
+        interactions_final = concat_stored_datasets(f"{INTERACTIONS_DAY_TO_DAY_FOLDER}/wsb-interactions__*.csv")
         interactions_final.to_csv(f"{OUT_FOLDER}/wsb-interactions.csv", index=False)
 
         print("---------------- creating final text sentiment dataset ----------------")
-        text_sentiment_final = append_stored_datasets(f"{TEXT_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-text-sentiment__*.csv")
+        text_sentiment_final = concat_stored_datasets(f"{TEXT_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-text-sentiment__*.csv")
         text_sentiment_final.to_csv(f"{OUT_FOLDER}/wsb-text-sentiment.csv", index=False)
 
         print("---------------- creating final user sentiment dataset ----------------")
-        user_sentiment_final = append_stored_datasets(f"{USER_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-user-sentiment__*.csv")
+        user_sentiment_final = concat_stored_datasets(f"{USER_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-user-sentiment__*.csv")
 
         # Recalculate average user sentiment
         user_sentiment_final = user_sentiment_final.groupby(by=[USER_COL], as_index=False).mean()
@@ -105,15 +105,13 @@ def setup_directories():
     Path(USER_SENTIMENT_DAY_TO_DAY_FOLDER).mkdir(parents=True, exist_ok=True)
 
 
-def append_stored_datasets(file_path_pattern: str) -> pd.DataFrame:
+def concat_stored_datasets(file_path_pattern: str) -> pd.DataFrame:
     """
     :param file_path_pattern: append only datasets whose path matches this pattern
+    :return: single dataframe containing all the datasets that matched the provided pattern
     """
-
-    # for file that matches pattern, append and then save into one csv file
-    # TODO implement this, then call this in main at the end for every type of file
-    #   for user-sentiment, it needs to be grouped by + mean() before being stored again
-    #   maybe create "partial" folder where all the day-to-day data is stored
+    # for each file that matches pattern,
+    # read and concat into a single dataframe
     path_list = glob.glob(f"{file_path_pattern}")
     df = pd.DataFrame()
     for path in path_list:
@@ -125,26 +123,3 @@ def append_stored_datasets(file_path_pattern: str) -> pd.DataFrame:
 
 if __name__ == "__main__":
     main()
-
-
-def day_to_day_text_from_interactions():
-    # Used because the code for text-sentiment datasets was added after having fetched the data
-    print("---------------- creating text sentiment day-to-day datasets ----------------")
-    import re
-    path_list = glob.glob(f"{INTERACTIONS_DAY_TO_DAY_FOLDER}/wsb-interactions__*.csv")
-    for path in path_list:
-        wsb_int = pd.read_csv(path)
-
-        interactions = []
-        for row in wsb_int.itertuples():
-            user = getattr(row, USER_COL)
-            text = getattr(row, TEXT_COL)
-            interacted_with = getattr(row, INTERACTED_WITH_COL)
-            temp = Interaction(user, text, interacted_with)
-            interactions.append(temp)
-
-        wsb_text_sentiment_df = get_text_sentiment_df(interactions,
-                                                      text_out_col=TEXT_COL,
-                                                      sentiment_out_col=SENTIMENT_COL)
-        file_date = re.match(".*__(.*).csv", path).group(1)
-        wsb_text_sentiment_df.to_csv(f"{TEXT_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-text-sentiment__{file_date}.csv")

@@ -310,3 +310,26 @@ def get_interaction_df(interactions: list[Interaction],
     }
 
     return pd.DataFrame(data=interaction_data)
+
+
+def get_interactions_from_df(interactions_df: pd.DataFrame,
+                             user_col: str, text_col: str,
+                             interacted_with_col: str) -> list[Interaction]:
+    """
+    Get a list of interaction objects from an interaction dataframe.
+    :param interactions_df: interactions dataframe
+    :param user_col: name of the user column (first) in the provided dataframe
+    :param text_col: name of the text column (second)  in the provided dataframe
+    :param interacted_with_col: name of the interacted_with column (third)
+        in the provided dataframe
+    :return: interaction objects list
+    """
+    interactions = []
+    for row in interactions_df.itertuples():
+        user = getattr(row, user_col)
+        text = getattr(row, text_col)
+        interacted_with = getattr(row, interacted_with_col)
+        temp = Interaction(user, text, interacted_with)
+        interactions.append(temp)
+
+    return interactions

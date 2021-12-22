@@ -32,13 +32,17 @@ def get_user_sentiment_df(interactions: list[Interaction],
     }
     user_df = pd.DataFrame(data=user_data)
 
+    # Performance optimization: some rows might be duplicated, for
+    # example if a bot posts the same text over and over, and keeping
+    # them makes the merging operation quite heavier
+    user_df = user_df.drop_duplicates()
+
     sentiment_df = get_text_sentiment_df(interactions=interactions,
                                          text_out_col=text_col,
                                          sentiment_out_col=sentiment_out_col)
 
-    user_sentiment_df = user_df.merge(sentiment_df, on=[text_col])
-
     # Calculate the sentiment of each user (average of their texts)
+    user_sentiment_df = user_df.merge(sentiment_df, on=[text_col])
     user_sentiment_df = user_sentiment_df.groupby(by=[user_out_col], as_index=False).mean()
 
     # Text column here is not needed, just user and their sentiment
@@ -58,19 +62,27 @@ def get_text_sentiment_df(interactions: list[Interaction],
     }
     text_df = pd.DataFrame(data=user_data)
 
+    # Performance optimization: some rows might be duplicated, for
+    # example if a bot posts the same text over and over
+    text_df = text_df.drop_duplicates()
+
     # https://github.com/cjhutto/vaderSentiment#resources-and-dataset-descriptions
     # positive sentiment: compound score >= 0.05
     # neutral sentiment: (compound score > -0.05) and (compound score < 0.05)
     # negative sentiment: compound score <= -0.05
     sentiment_analyzer = SentimentIntensityAnalyzer()
 
-    # Calculate sentiment score for each comment
-    # only compound score is necessary because it sums up neu, pos and neg scores.
-    text_df[text_out_col] = _preprocess_text(text_df[text_out_col])
-    text_df[sentiment_out_col] = text_df[text_out_col].apply(
+    # Calculate sentiment score for each text
+    # It's important to preprocess it to make analysis more accurate
+    # Only compound score is necessary because it sums up neu, pos and neg scores.
+    preprocessed_col = "preprocessed_text"
+    text_df[preprocessed_col] = _preprocess_text(text_df[text_out_col])
+    text_df[sentiment_out_col] = text_df[preprocessed_col].apply(
         lambda txt: (sentiment_analyzer.polarity_scores(txt))["compound"])
 
-    return text_df
+    # The preprocessed col doesn't need to be returned,
+    # it was useful for sentiment analysis only
+    return text_df[[text_out_col, sentiment_out_col]]
 
 
 def _preprocess_text(text_data: pd.Series) -> pd.Series:
