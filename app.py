@@ -7,7 +7,7 @@ from src.sentiment import get_user_sentiment_df, get_text_sentiment_df
 from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
 # TODO make it so this parameter comes from a config file (or even both the starting and ending date)
-# Get data from up to one month and a half ago
+# Get data from up to 45 days ago
 DAYS_INTERVAL = 45
 STARTING_DATE = datetime.today() - timedelta(days=DAYS_INTERVAL)
 
@@ -78,20 +78,21 @@ def main():
 
         print(f"--------- {day_info} Completed ---------")
 
-        print("---------------- creating final interaction dataset ----------------")
-        interactions_final = concat_stored_datasets(f"{INTERACTIONS_DAY_TO_DAY_FOLDER}/wsb-interactions__*.csv")
-        interactions_final.to_csv(f"{OUT_FOLDER}/wsb-interactions.csv", index=False)
+    # TODO this has been modified after the script has started to run
+    print("---------------- creating final interaction dataset ----------------")
+    interactions_final = concat_stored_datasets(f"{INTERACTIONS_DAY_TO_DAY_FOLDER}/wsb-interactions__*.csv")
+    interactions_final.to_csv(f"{OUT_FOLDER}/wsb-interactions.csv", index=False)
 
-        print("---------------- creating final text sentiment dataset ----------------")
-        text_sentiment_final = concat_stored_datasets(f"{TEXT_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-text-sentiment__*.csv")
-        text_sentiment_final.to_csv(f"{OUT_FOLDER}/wsb-text-sentiment.csv", index=False)
+    print("---------------- creating final text sentiment dataset ----------------")
+    text_sentiment_final = concat_stored_datasets(f"{TEXT_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-text-sentiment__*.csv")
+    text_sentiment_final.to_csv(f"{OUT_FOLDER}/wsb-text-sentiment.csv", index=False)
 
-        print("---------------- creating final user sentiment dataset ----------------")
-        user_sentiment_final = concat_stored_datasets(f"{USER_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-user-sentiment__*.csv")
+    print("---------------- creating final user sentiment dataset ----------------")
+    user_sentiment_final = concat_stored_datasets(f"{USER_SENTIMENT_DAY_TO_DAY_FOLDER}/wsb-user-sentiment__*.csv")
 
-        # Recalculate average user sentiment
-        user_sentiment_final = user_sentiment_final.groupby(by=[USER_COL], as_index=False).mean()
-        user_sentiment_final.to_csv(f"{OUT_FOLDER}/wsb-user-sentiment.csv", index=False)
+    # Recalculate average user sentiment
+    user_sentiment_final = user_sentiment_final.groupby(by=[USER_COL], as_index=False).mean()
+    user_sentiment_final.to_csv(f"{OUT_FOLDER}/wsb-user-sentiment.csv", index=False)
 
     print("__________________________________________________________________________________________________________")
     print(f"Data for interval {STARTING_DATE} - {STARTING_DATE + timedelta(days=DAYS_INTERVAL)} successfully fetched.")

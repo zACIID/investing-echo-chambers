@@ -309,6 +309,8 @@ def get_interaction_df(interactions: list[Interaction],
         interacted_with_out_col: [i.interacted_with for i in interactions]
     }
 
+    # TODO for some reason, user or interacted_with can be "", so drop those
+    #       or select where user and interacted_with != ""
     return pd.DataFrame(data=interaction_data)
 
 
