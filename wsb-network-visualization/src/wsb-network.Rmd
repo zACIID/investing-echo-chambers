@@ -272,6 +272,21 @@ ggraph(communities.network, layout="circle", order=order(V(communities.network)$
 
 ### Sentiment distribution
 
+Si vede dai colori poco accesi che sentiment è generalmente neutro
+
+```{r}
+# Bar plot of community sizes, colored by sentiment
+ggplot(communities.dt[size > 5,], aes(x=reorder(community, sentiment), y=size, fill=sentiment)) + 
+    scale_fill_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
+    geom_bar(stat="identity") +
+    geom_vline(aes(xintercept=mean(sentiment)),color=mean_line.color, linetype="dashed", size=1) +
+    theme(axis.text.x=element_blank(),
+          axis.ticks.x=element_blank()) +
+    labs(x="community (size greater than 5)", y="size")
+```
+
+Intuizione confermata dal plot della distribuzione
+
 ```{r}
 # density plot
 ggplot(communities.dt, aes(x=sentiment)) +
@@ -280,27 +295,37 @@ ggplot(communities.dt, aes(x=sentiment)) +
     ggtitle("Sentiment distribution across r/wallstreetbets communities") +
     theme_ft_rc(plot_title_size=titles.size) +
     labs(x="sentiment", y="frequency")
-
-# Bar plot (x=community, y=size, color=sentiment)
-# Basic density
-#to_plot <- communities.dt[size > 25, ]
-#to_plot <- to_plot[order(sentiment)]
-#ggplot(to_plot, aes(x=reorder(community, sentiment), y=size, fill=sentiment)) + 
-#    scale_fill_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
-#    geom_bar(stat="identity") +
-#    #geom_histogram(aes(y=..density..), alpha=0.7) +
-#    #geom_density() +
-#    geom_vline(aes(xintercept=mean(sentiment)),
-#               color="darkred", linetype="dashed", size=1) +
-#    theme_classic()
-#
-#ggplot(to_plot, aes(x=sentiment, fill=sentiment)) + 
-#    scale_fill_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
-#    #(stat="identity") +
-#    #geom_histogram(aes(y=..density..), alpha=0.7) +
-#    geom_density() +
-#    geom_vline(aes(xintercept=mean(sentiment)),
-#               color="darkred", linetype="dashed", size=1) +
-#    theme_classic()
 ```
+
+
+
+# Visualizing Echo Chambers
+
+```{r}
+# TODO fix, copied from echo chambers example
+nn_data=as_long_data_frame(gab_conversation_graph)
+setDT(nn_data)
+neighbors_data=rbind(nn_data[from_id!=to_id,
+                             .(nn_leaning=mean(to_n_leaning,na.rm=T),
+                              leaning=unique(from_n_leaning)),
+                             by=.(id=from_id)],
+                     nn_data[from_id!=to_id,
+                             .(nn_leaning=mean(from_n_leaning, na.rm=T),
+                               leaning=unique(to_n_leaning)),
+                             by=.(id=to_id)])
+
+neighbors_data=distinct(neighbors_data,id,.keep_all = T)
+
+ggplot(neighbors_data[!is.na(leaning) & !is.nan(nn_leaning)], aes(x=leaning, y=nn_leaning))+
+  geom_density_2d_filled()+
+  geom_point(alpha=0.5)+
+  scale_fill_viridis(option = "magma", discrete=T)+
+  theme_classic()+
+  theme(legend.position = "none")
+```
+
+
+
+
+
 
