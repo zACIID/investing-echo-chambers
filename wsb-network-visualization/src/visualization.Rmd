@@ -19,15 +19,22 @@ library(hrbrthemes)
 ```
 
 
-```{r plot_styling}
-edge.color <- "#cacac0"
-#density.border <- "#5c3da6"
-#density.fill <- "#8871bf"
+```{r style}
+# Density plots style
 density.border <- "#ff7512"
 density.fill <- "#ffa500"
 density.fill.alpha <- 0.5
+
+density.hist.border <- "black"
+density.hist.fill <- "white"
+density.hist.fill.alpha <- 0.2
+
 mean_line.color <- "darkred"
 titles.size <- 15
+
+# Graph plots style
+edge.color <- "#cacac0"
+
 # Dark red, red, light red, light green, green, dark green
 bear_bull_color_scale <- c("#8a0007", "#d9000c", "#fa6b73", "#add6a7", "#6db064", "#127a04")
 ```
@@ -58,6 +65,19 @@ head(user.sentiment)
 ```
 
 # Data cleaning and pre-processing
+
+## Make sure data-types are correct
+
+```{r}
+# Do it just for sentiment scores, since they will be plotted.
+# Must make sure they are of numeric type, else they will be plotted as discrete values
+user.sentiment <- user.sentiment[, sentiment_score:=as.double(sentiment_score)]
+head(user.sentiment)
+
+text.sentiment <- text.sentiment[, sentiment_score:=as.double(sentiment_score)]
+head(text.sentiment)
+```
+
 
 ## Remove moderator bots
 
@@ -113,10 +133,13 @@ user.sentiment <- user.sentiment[(user != ""), ]
 # density plot
 ggplot(text.sentiment, aes(x=sentiment_score)) +
     geom_density(color=density.border, fill=density.fill, alpha=density.fill.alpha) +
-    geom_vline(aes(xintercept=mean(sentiment_score)), color=mean_line.color, linetype="dashed", size=1) +
+    geom_histogram(aes(y=..density..), colour=density.hist.border, 
+                   fill=density.hist.fill, alpha=density.hist.fill.alpha) +
+    geom_vline(aes(xintercept=mean(sentiment_score)), 
+               color=mean_line.color, linetype="dashed", size=1) +
     ggtitle("Sentiment distribution across r/wallstreetbets text data") +
     theme_ft_rc(plot_title_size=titles.size) +
-    labs(x="sentiment", y="frequency")
+    labs(x="sentiment", y="density")
 ```
 
 
@@ -127,10 +150,13 @@ ggplot(text.sentiment, aes(x=sentiment_score)) +
 # density plot
 ggplot(user.sentiment, aes(x=sentiment_score)) +
     geom_density(color=density.border, fill=density.fill, alpha=density.fill.alpha) +
-    geom_vline(aes(xintercept=mean(sentiment_score)), color=mean_line.color, linetype="dashed", size=1) +
+    geom_histogram(aes(y=..density..), colour=density.hist.border, 
+                   fill=density.hist.fill, alpha=density.hist.fill.alpha) +
+    geom_vline(aes(xintercept=mean(sentiment_score)), 
+               color=mean_line.color, linetype="dashed", size=1) +
     ggtitle("Sentiment distribution across r/wallstreetbets users") +
     theme_ft_rc(plot_title_size=titles.size) +
-    labs(x="sentiment", y="frequency")
+    labs(x="sentiment", y="density")
 ```
 
 
@@ -152,8 +178,8 @@ head(E(user.network))
 # Set sentiment attribute in the vertexes
 sentiment.with_order <- user.sentiment[as.character(user) %in% as.character(V(user.network)$name)]
 sentiment.with_order <- sentiment.with_order[order(match(user, V(user.network)$name))]
-user.network <- set_vertex_attr(user.network, "sentiment", 
-                                index = V(user.network)[as.character(name) %in% as.character(sentiment.with_order$user)], 
+set_idx <- V(user.network)[as.character(name) %in% as.character(sentiment.with_order$user)]
+user.network <- set_vertex_attr(user.network, "sentiment", index = set_idx, 
                                 sentiment.with_order$sentiment_score)
 ```
 
@@ -209,8 +235,12 @@ vertex.dt <- data.table(
 )
 
 # Create a data.table of community edges from the user network vertexes
-community_edges.dt <- merge.data.table(vertex.dt, user_edges.dt, by.x=c("name"), by.y="user")
-community_edges.dt <- merge.data.table(vertex.dt, community_edges.dt, by.x=c("name"), by.y="interacted_with")
+community_edges.dt <- merge.data.table(vertex.dt, user_edges.dt, 
+                                       by.x=c("name"), by.y="user")
+
+community_edges.dt <- merge.data.table(vertex.dt, community_edges.dt, 
+                                       by.x=c("name"), by.y="interacted_with")
+
 community_edges.dt <- community_edges.dt[, c("community.x", "community.y")]
 colnames(community_edges.dt) <- c("from_community", "to_community")
 
@@ -229,12 +259,14 @@ communities.network <- simplify(communities.network)
 
 # Need to order the communities before assigning attributes to vertexes,
 # else the values to assign "aren't aligned" with the vertexes they should go to
-comm.with_order <- communities.dt[as.character(community) %in% as.character(V(communities.network)$name)]
+comm.with_order <- communities.dt[as.character(community) 
+                                  %in% as.character(V(communities.network)$name)]
+
 comm.with_order <- comm.with_order[order(match(community, V(communities.network)$name))]
 
 # Assign size and sentiment attributes to network vertexes
-communities.network <- set_vertex_attr(communities.network, "size", 
-                                       index = V(communities.network)[as.character(name) %in% as.character(comm.with_order$community)], 
+set_idx <- V(communities.network)[as.character(name) %in% as.character(comm.with_order$community)]
+communities.network <- set_vertex_attr(communities.network, "size",index = set_idx, 
                                        comm.with_order$size)
 ```
 
@@ -252,8 +284,9 @@ ggraph(communities.network, layout="kk") +
 
 ```{r}
 # Add sentiment attribute to community vertexes
+set_idx <- V(communities.network)[as.character(name) %in% as.character(comm.with_order$community)]
 communities.network <- set_vertex_attr(communities.network, "sentiment", 
-                                       index = V(communities.network)[as.character(name) %in% as.character(comm.with_order$community)], 
+                                       index = set_idx, 
                                        comm.with_order$sentiment)
 ```
 
@@ -280,6 +313,7 @@ ggplot(communities.dt[size > 5,], aes(x=reorder(community, sentiment), y=size, f
     scale_fill_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
     geom_bar(stat="identity") +
     geom_vline(aes(xintercept=mean(sentiment)),color=mean_line.color, linetype="dashed", size=1) +
+    theme_ft_rc() +
     theme(axis.text.x=element_blank(),
           axis.ticks.x=element_blank()) +
     labs(x="community (size greater than 5)", y="size")
@@ -290,11 +324,17 @@ Intuizione confermata dal plot della distribuzione
 ```{r}
 # density plot
 ggplot(communities.dt, aes(x=sentiment)) +
-    geom_density(color=density.border, fill=density.fill, alpha=density.fill.alpha) +
-    geom_vline(aes(xintercept=mean(sentiment)), color=mean_line.color, linetype="dashed", size=1) +
+    geom_density(aes(y=..density..), color=density.border, 
+                 fill=density.fill, alpha=density.fill.alpha) +
+    geom_histogram(aes(y=..density..), colour=density.hist.border, 
+                   fill=density.hist.fill, alpha=density.hist.fill.alpha) +
+    geom_vline(aes(xintercept=mean(sentiment)), 
+               color=mean_line.color, linetype="dashed", size=1) +
     ggtitle("Sentiment distribution across r/wallstreetbets communities") +
     theme_ft_rc(plot_title_size=titles.size) +
-    labs(x="sentiment", y="frequency")
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank()) +
+    labs(x="sentiment", y="density")
 ```
 
 
@@ -316,7 +356,8 @@ neighbors_data=rbind(nn_data[from_id!=to_id,
 
 neighbors_data=distinct(neighbors_data,id,.keep_all = T)
 
-ggplot(neighbors_data[!is.na(leaning) & !is.nan(nn_leaning)], aes(x=leaning, y=nn_leaning))+
+ggplot(neighbors_data[!is.na(leaning) & !is.nan(nn_leaning)], 
+       aes(x=leaning, y=nn_leaning)) +
   geom_density_2d_filled()+
   geom_point(alpha=0.5)+
   scale_fill_viridis(option = "magma", discrete=T)+
