@@ -17,11 +17,8 @@ library(graphlayouts)
 library(hrbrthemes)  # plot themes
 library(manipulate)  # add #points to density raster
 
-VISUALIZATIONS_DIR <- "../visualizations"
-
 getwd()
 ```
-
 
 ```{r style}
 # Density plots style
@@ -40,7 +37,6 @@ titles.size <- 15
 density.2d.palette <- "magma"
 density.2d.raster_points <- 250
 
-
 # Graph plots style
 edge.color <- "#cacac0"
 
@@ -48,6 +44,23 @@ edge.color <- "#cacac0"
 bear_bull_color_scale <- c("#8a0007", "#d9000c", "#fa6b73", "#add6a7", "#6db064", "#127a04")
 ```
 
+```{r setup_img_dir}
+VISUALIZATIONS_DIR <- "../visualizations"
+
+#!dir.exists(file.path(mainDir, subDir)), dir.create(file.path(mainDir, subDir)), FALSE)
+if (!dir.exists(VISUALIZATIONS_DIR)) {
+  dir.create(VISUALIZATIONS_DIR)
+  print(paste0("created dir at: ", VISUALIZATIONS_DIR))
+}
+```
+
+```{r img_save_params}
+# ggsave parameters used to save visualizations into images
+img.type <- "png"
+img.height <- 9  # inches
+img.width <- 12  # inches
+img.dpi <- 700
+```
 
 
 # Load datasets
@@ -131,6 +144,10 @@ ggplot(text.sentiment, aes(x=sentiment_score)) +
     theme(axis.text.y=element_blank(),
           axis.ticks.y=element_blank()) +
     labs(x="sentiment", y="density")
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="text-sentiment-distr.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 
@@ -150,6 +167,10 @@ ggplot(user.sentiment, aes(x=sentiment_score)) +
     theme(axis.text.y=element_blank(),
           axis.ticks.y=element_blank()) +
     labs(x="sentiment", y="density")
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="user-sentiment-distr.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 
@@ -246,6 +267,10 @@ ggraph(communities.network, layout="kk") +
     geom_edge_link(color=edge.color) +
     geom_node_point(aes(color=as.factor(name), size=size)) +
     theme(legend.position="none")
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="community-net.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 
@@ -268,10 +293,21 @@ ggraph(communities.network, layout="kk") +
     geom_node_point(aes(color=sentiment, size=size)) +
     scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1))
 
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="community-net-sentiment.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
+```
+
+```{r}
+# Plot circular network to better understand how sentiment is distributed across vertexes
 ggraph(communities.network, layout="circle", order=order(V(communities.network)$sentiment)) + 
     geom_edge_link(color=edge.color) +
     geom_node_point(aes(color=sentiment, size=size)) +
     scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1))
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="community-net-sentiment-circle.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 ### Sentiment distribution
@@ -289,6 +325,10 @@ ggplot(communities.dt[size > 5,], aes(x=reorder(community, sentiment),
     theme(axis.text.x=element_blank(),
           axis.ticks.x=element_blank()) +
     labs(x="community (size greater than 5)", y="size")
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="community-size-sentiment.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 Intuizione confermata dal plot della distribuzione
@@ -307,6 +347,10 @@ ggplot(communities.dt, aes(x=sentiment)) +
     theme(axis.text.y=element_blank(),
           axis.ticks.y=element_blank()) +
     labs(x="sentiment", y="density")
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="community-sentiment-distr.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 
@@ -330,19 +374,22 @@ user.nn_data <- rbind(user.network.data[from_name != to_name,
 
 user.nn_data <- distinct(user.nn_data, id, .keep_all = T)
 
+# manipulate is needed for the "n" parameter, #points in the raster grid
 manipulate(
   ggplot(user.nn_data[!is.na(sentiment) & !is.nan(nn_sentiment)], 
        aes(x=sentiment, y=nn_sentiment)) +
   stat_density_2d(aes(fill = ..density..), geom="raster", contour=FALSE, 
                   n=density.2d.raster_points) +
   lims(x=c(-1, 1), y=c(-1, 1)) +
-  scale_fill_viridis(option=density.2d.raster_points) +
+  scale_fill_viridis(option=density.2d.palette) +
   theme_classic() +
   theme(legend.position="none") +
   labs(x="user sentiment", y="neighborhood sentiment")
 )
 
-#ggsave(path="../visualizations", filename="user-nn-sentiment.png", width=10, height=10, device='png', dpi=700)
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="user-nn-sentiment.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 
@@ -363,6 +410,7 @@ comm.nn_data <- rbind(communities.network.data[from_name != to_name,
 
 comm.nn_data <- distinct(comm.nn_data, id, .keep_all = T)
 
+# manipulate is needed for the "n" parameter, #points in the raster grid
 manipulate(
   ggplot(comm.nn_data[!is.na(sentiment) & !is.nan(nn_sentiment)], 
        aes(x=sentiment, y=nn_sentiment)) +
@@ -374,6 +422,10 @@ manipulate(
   theme(legend.position="none") +
   labs(x="community sentiment", y="neighborhood sentiment")
 )
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="community-nn-sentiment.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 
