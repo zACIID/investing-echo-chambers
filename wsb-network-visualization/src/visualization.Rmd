@@ -9,13 +9,17 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library(data.table)
-library(digest)
 library(dplyr)
 library(ggplot2)
 library(ggraph)
 library(igraph)
 library(graphlayouts)
-library(hrbrthemes)
+library(hrbrthemes)  # plot themes
+library(manipulate)  # add #points to density raster
+
+VISUALIZATIONS_DIR <- "../visualizations"
+
+getwd()
 ```
 
 
@@ -31,6 +35,11 @@ density.hist.fill.alpha <- 0.2
 
 mean_line.color <- "darkred"
 titles.size <- 15
+
+# 2d Density raster style
+density.2d.palette <- "magma"
+density.2d.raster_points <- 250
+
 
 # Graph plots style
 edge.color <- "#cacac0"
@@ -106,26 +115,6 @@ user.sentiment <- user.sentiment[(user != ""), ]
 ```
 
 
-## Anonymize usernames
-
-```{r}
-# TODO makes everything heavier and causes errors, need to remove
-
-#anonymize <- function(data, cols_to_anon, algo = "sha256"){
-#    if(!require(digest)) stop("digest package is required")
-#    to_anon <- subset(data, select = cols_to_anon)
-#    unname(apply(to_anon, 1, digest, algo = algo))
-#}
-#
-#user.sentiment$user <- anonymize(user.sentiment, "user")
-#head(user.sentiment)
-#
-#interactions$user <- anonymize(interactions, "user")
-#interactions$interacted_with <- anonymize(interactions, "interacted_with")
-#head(interactions)
-```
-
-
 
 # Distribution of text sentiment 
 
@@ -139,6 +128,8 @@ ggplot(text.sentiment, aes(x=sentiment_score)) +
                color=mean_line.color, linetype="dashed", size=1) +
     ggtitle("Sentiment distribution across r/wallstreetbets text data") +
     theme_ft_rc(plot_title_size=titles.size) +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank()) +
     labs(x="sentiment", y="density")
 ```
 
@@ -156,6 +147,8 @@ ggplot(user.sentiment, aes(x=sentiment_score)) +
                color=mean_line.color, linetype="dashed", size=1) +
     ggtitle("Sentiment distribution across r/wallstreetbets users") +
     theme_ft_rc(plot_title_size=titles.size) +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank()) +
     labs(x="sentiment", y="density")
 ```
 
@@ -181,29 +174,6 @@ sentiment.with_order <- sentiment.with_order[order(match(user, V(user.network)$n
 set_idx <- V(user.network)[as.character(name) %in% as.character(sentiment.with_order$user)]
 user.network <- set_vertex_attr(user.network, "sentiment", index = set_idx, 
                                 sentiment.with_order$sentiment_score)
-```
-
-```{r}
-# TODO does it make sense to plot such a large network?
-# Plain network plot, no sentiment info
-#ggraph(user.network, layout="randomly") + 
-#    geom_edge_link(color=edge.color) +
-#    geom_node_point(aes(color=as.factor(name))) +
-#    theme(legend.position="none")
-```
-
-```{r}
-# TODO ultra heavy
-# Plot network graph with sentiment data
-#ggraph(user.network, layout="grid") + 
-#    geom_edge_link(color=edge.color) +
-#    geom_node_point(aes(color=sentiment)) +
-#    scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1))
-#
-#ggraph(user.network, layout="circle", order=order(V(user.network)$sentiment)) + 
-#    geom_edge_link(color=edge.color) +
-#    geom_node_point(aes(color=sentiment)) +
-#    scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1))
 ```
 
 
@@ -278,6 +248,7 @@ ggraph(communities.network, layout="kk") +
     theme(legend.position="none")
 ```
 
+
 ## Communities Sentiment
 
 ### Network graph
@@ -309,7 +280,8 @@ Si vede dai colori poco accesi che sentiment è generalmente neutro
 
 ```{r}
 # Bar plot of community sizes, colored by sentiment
-ggplot(communities.dt[size > 5,], aes(x=reorder(community, sentiment), y=size, fill=sentiment)) + 
+ggplot(communities.dt[size > 5,], aes(x=reorder(community, sentiment), 
+                                      y=size, fill=sentiment)) + 
     scale_fill_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
     geom_bar(stat="identity") +
     geom_vline(aes(xintercept=mean(sentiment)),color=mean_line.color, linetype="dashed", size=1) +
@@ -341,32 +313,67 @@ ggplot(communities.dt, aes(x=sentiment)) +
 
 # Visualizing Echo Chambers
 
+## User network
+
 ```{r}
-# TODO fix, copied from echo chambers example
-nn_data=as_long_data_frame(gab_conversation_graph)
-setDT(nn_data)
-neighbors_data=rbind(nn_data[from_id!=to_id,
-                             .(nn_leaning=mean(to_n_leaning,na.rm=T),
-                              leaning=unique(from_n_leaning)),
-                             by=.(id=from_id)],
-                     nn_data[from_id!=to_id,
-                             .(nn_leaning=mean(from_n_leaning, na.rm=T),
-                               leaning=unique(to_n_leaning)),
-                             by=.(id=to_id)])
+user.network.data <- as_long_data_frame(user.network)
+setDT(user.network.data)
 
-neighbors_data=distinct(neighbors_data,id,.keep_all = T)
+user.nn_data <- rbind(user.network.data[from_name != to_name, 
+                                        .(nn_sentiment=mean(to_sentiment, na.rm=T), 
+                                          sentiment=unique(from_sentiment)), 
+                                        by=.(id=from_name)],
+                      user.network.data[from_name != to_name,
+                                        .(nn_sentiment=mean(from_sentiment, na.rm=T),
+                                          sentiment=unique(to_sentiment)),
+                                        by=.(id=to_name)])
 
-ggplot(neighbors_data[!is.na(leaning) & !is.nan(nn_leaning)], 
-       aes(x=leaning, y=nn_leaning)) +
-  geom_density_2d_filled()+
-  geom_point(alpha=0.5)+
-  scale_fill_viridis(option = "magma", discrete=T)+
-  theme_classic()+
-  theme(legend.position = "none")
+user.nn_data <- distinct(user.nn_data, id, .keep_all = T)
+
+manipulate(
+  ggplot(user.nn_data[!is.na(sentiment) & !is.nan(nn_sentiment)], 
+       aes(x=sentiment, y=nn_sentiment)) +
+  stat_density_2d(aes(fill = ..density..), geom="raster", contour=FALSE, 
+                  n=density.2d.raster_points) +
+  lims(x=c(-1, 1), y=c(-1, 1)) +
+  scale_fill_viridis(option=density.2d.raster_points) +
+  theme_classic() +
+  theme(legend.position="none") +
+  labs(x="user sentiment", y="neighborhood sentiment")
+)
+
+#ggsave(path="../visualizations", filename="user-nn-sentiment.png", width=10, height=10, device='png', dpi=700)
 ```
 
 
+## Communities network
 
+```{r}
+communities.network.data <- as_long_data_frame(communities.network)
+setDT(communities.network.data)
 
+comm.nn_data <- rbind(communities.network.data[from_name != to_name, 
+                                               .(nn_sentiment=mean(to_sentiment, na.rm=T), 
+                                                 sentiment=unique(from_sentiment)), 
+                                               by=.(id=from_name)],
+                      communities.network.data[from_name != to_name,
+                                               .(nn_sentiment=mean(from_sentiment, na.rm=T),
+                                                 sentiment=unique(to_sentiment)),
+                                               by=.(id=to_name)])
+
+comm.nn_data <- distinct(comm.nn_data, id, .keep_all = T)
+
+manipulate(
+  ggplot(comm.nn_data[!is.na(sentiment) & !is.nan(nn_sentiment)], 
+       aes(x=sentiment, y=nn_sentiment)) +
+  stat_density_2d(aes(fill = ..density..), geom="raster", contour=FALSE, 
+                  n=density.2d.raster_points) +
+  lims(x=c(-1, 1), y=c(-1, 1)) +
+  scale_fill_viridis(option=density.2d.palette) +
+  theme_classic() +
+  theme(legend.position="none") +
+  labs(x="community sentiment", y="neighborhood sentiment")
+)
+```
 
 
