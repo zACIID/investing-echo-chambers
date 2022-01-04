@@ -1,2 +1,2 @@
-# wsb-echo-chambers
-Research on r/wsb subreddit. The aim is to verify if it acts as a huge echo chamber where everybody is perma-positive about the stock market.
+# investing-echo-chambers
+Research on reddit investing-related submissions. The aim is to detect user communities and analyze their sentiment, to understand if there are any echo chambers.
