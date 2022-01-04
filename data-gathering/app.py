@@ -1,5 +1,4 @@
 import glob
-import sys
 
 import pandas as pd
 from pathlib import Path
@@ -8,8 +7,9 @@ from src.interactions import SubmissionsInteractionFetcher, get_interaction_df
 from src.sentiment import get_user_sentiment_df, get_text_sentiment_df
 from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
+# last two weeks of december
 ENDING_DATE = datetime(year=2021, month=12, day=31)
-STARTING_DATE = datetime(year=2021, month=12, day=30)
+STARTING_DATE = datetime(year=2021, month=12, day=17)
 DAYS_INTERVAL = (ENDING_DATE - STARTING_DATE).days
 
 # Output directories
@@ -34,7 +34,7 @@ def main():
         to_date = STARTING_DATE + timedelta(days=day)
 
         search_params = {
-            "q": "stonks",
+            "q": "(stocks)|(markets)|(stock market)|(investing)|(investment)",
             "after": int(from_date.timestamp()),
             "before": int(to_date.timestamp()),
             "limit": None
