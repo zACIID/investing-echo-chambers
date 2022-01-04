@@ -1,13 +1,17 @@
 import glob
+import sys
+
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
 from src.interactions import SubmissionsInteractionFetcher, get_interaction_df
 from src.sentiment import get_user_sentiment_df, get_text_sentiment_df
+
+print(sys.path)
 from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
 ENDING_DATE = datetime(year=2021, month=12, day=31)
-STARTING_DATE = datetime(year=2021, month=12, day=17)
+STARTING_DATE = datetime(year=2021, month=12, day=30)
 DAYS_INTERVAL = (ENDING_DATE - STARTING_DATE).days
 
 # Output directories

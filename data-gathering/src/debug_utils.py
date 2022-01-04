@@ -1,8 +1,8 @@
 import glob
 import pandas as pd
-from interactions import get_interactions_from_df
-from sentiment import get_user_sentiment_df, get_text_sentiment_df
-from constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
+from src.interactions import get_interactions_from_df
+from src.sentiment import get_user_sentiment_df, get_text_sentiment_df
+from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
 # Output directories
 OUT_FOLDER = "./output"

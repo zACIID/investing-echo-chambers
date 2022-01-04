@@ -7,7 +7,7 @@ from praw.models import Submission, Comment
 from prawcore import Requestor
 from psaw import PushshiftAPI
 from datetime import datetime
-from constants import COMMENT_PREFIX, USER_PREFIX, SUBMISSION_PREFIX
+from src.constants import COMMENT_PREFIX, USER_PREFIX, SUBMISSION_PREFIX
 
 
 class LoggingRequestor(Requestor):

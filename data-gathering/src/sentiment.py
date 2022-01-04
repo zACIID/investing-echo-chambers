@@ -2,7 +2,7 @@ import re
 import pandas as pd
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from interactions import Interaction
+from src.interactions import Interaction
 
 # Needed for vader sentiment analyzer
 nltk.download("vader_lexicon")
