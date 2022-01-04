@@ -1,0 +1,34 @@
+# This file needs to be placed on the project's working directory
+# and have the ".sample" extension removed
+
+# To get the following credentials, follow the procedure:
+# 1. Sign up for Reddit API use and accept terms & conditions at https://www.reddit.com/wiki/api
+# 2. see "developed applications" at https://www.reddit.com/prefs/apps and create a new script application.
+#       "about url" can be left empty and "redirect uri" can simply be "http://localhost:8080".
+
+# Define new site (inherits from DEFAULT) for this app
+# (see https://praw.readthedocs.io/en/stable/getting_started/configuration/prawini.html)
+[project]
+
+# A unique description of your application.
+# The following format is recommended according to Reddit’s API Rules:
+# <platform>:<app ID>:<version string> (by u/<reddit username>).
+user_agent=
+
+# The client ID is the 14-character string listed just under “personal use script”
+# for the desired developed application
+client_id=
+
+# The client secret is at least a 27-character string listed adjacent
+# to "secret" for the application.
+client_secret=
+
+# Credentials for reddit account
+password=
+username=
+
+# PRAW will wait for ratelimit_seconds + 1 before raising a timeout exception.
+ratelimit_seconds=15
+
+# Timeout for requests to reddit in seconds
+timeout=15
