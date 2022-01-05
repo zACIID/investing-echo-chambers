@@ -67,21 +67,21 @@ img.dpi <- 700
 
 ```{r}
 # Col-names: user, text, interacted_with
-interactions <- fread("../datasets/wsb-interactions.csv", sep=",", header=TRUE)
+interactions <- fread("../datasets/interactions.csv", sep=",", header=TRUE)
 dim(interactions)
 head(interactions)
 ```
 
 ```{r}
 # Col-names: text, sentiment_score
-text.sentiment <- fread("../datasets/wsb-text-sentiment.csv", sep=",", header=TRUE)
+text.sentiment <- fread("../datasets/text-sentiment.csv", sep=",", header=TRUE)
 dim(text.sentiment)
 head(text.sentiment)
 ```
 
 ```{r}
 # Col-names: user, sentiment_score
-user.sentiment <- fread("../datasets/wsb-user-sentiment.csv", sep=",")
+user.sentiment <- fread("../datasets/user-sentiment.csv", sep=",")
 dim(user.sentiment)
 head(user.sentiment)
 ```
@@ -101,10 +101,11 @@ head(text.sentiment)
 ```
 
 
-## Remove moderator bots
+## Attempt to remove bots (TODO remove or add keywords like "Bot" o "Mod") to check inside the user (case sensitive check)
 
 ```{r}
 # AutoModerator, VisualMod
+# Cerca di aggiungere anche anonymization
 bot_mods <- c("VisualMod", "AutoModerator")
 
 interactions = interactions[!(user %in% bot_mods | interacted_with %in% bot_mods), ]
@@ -139,7 +140,7 @@ ggplot(text.sentiment, aes(x=sentiment_score)) +
                    fill=density.hist.fill, alpha=density.hist.fill.alpha) +
     geom_vline(aes(xintercept=mean(sentiment_score)), 
                color=mean_line.color, linetype="dashed", size=1) +
-    ggtitle("Sentiment distribution across r/wallstreetbets text data") +
+    ggtitle("Sentiment distribution across text data") +
     theme_ft_rc(plot_title_size=titles.size) +
     theme(axis.text.y=element_blank(),
           axis.ticks.y=element_blank()) +
@@ -162,7 +163,7 @@ ggplot(user.sentiment, aes(x=sentiment_score)) +
                    fill=density.hist.fill, alpha=density.hist.fill.alpha) +
     geom_vline(aes(xintercept=mean(sentiment_score)), 
                color=mean_line.color, linetype="dashed", size=1) +
-    ggtitle("Sentiment distribution across r/wallstreetbets users") +
+    ggtitle("Sentiment distribution across users") +
     theme_ft_rc(plot_title_size=titles.size) +
     theme(axis.text.y=element_blank(),
           axis.ticks.y=element_blank()) +
@@ -316,15 +317,15 @@ Si vede dai colori poco accesi che sentiment è generalmente neutro
 
 ```{r}
 # Bar plot of community sizes, colored by sentiment
-ggplot(communities.dt[size > 5,], aes(x=reorder(community, sentiment), 
-                                      y=size, fill=sentiment)) + 
+min_size = 50
+ggplot(communities.dt[size > min_size,], aes(x=reorder(community, sentiment), 
+                                             y=size, fill=sentiment)) + 
     scale_fill_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
     geom_bar(stat="identity") +
-    geom_vline(aes(xintercept=mean(sentiment)),color=mean_line.color, linetype="dashed", size=1) +
     theme_ft_rc() +
     theme(axis.text.x=element_blank(),
           axis.ticks.x=element_blank()) +
-    labs(x="community (size greater than 5)", y="size")
+    labs(x=paste0("community (size greater than ", min_size, ")"), y="size")
 
 # Save plot as image
 ggsave(path=VISUALIZATIONS_DIR, filename="community-size-sentiment.png", device=img.type,
@@ -342,7 +343,7 @@ ggplot(communities.dt, aes(x=sentiment)) +
                    fill=density.hist.fill, alpha=density.hist.fill.alpha) +
     geom_vline(aes(xintercept=mean(sentiment)), 
                color=mean_line.color, linetype="dashed", size=1) +
-    ggtitle("Sentiment distribution across r/wallstreetbets communities") +
+    ggtitle("Sentiment distribution across communities") +
     theme_ft_rc(plot_title_size=titles.size) +
     theme(axis.text.y=element_blank(),
           axis.ticks.y=element_blank()) +
