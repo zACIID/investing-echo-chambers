@@ -104,8 +104,8 @@ head(text.sentiment)
 ## Attempt to remove bots (TODO remove or add keywords like "Bot" o "Mod") to check inside the user (case sensitive check)
 
 ```{r}
-# AutoModerator, VisualMod
-# Cerca di aggiungere anche anonymization
+# TODO Bot, Mod
+# TODO Cerca di aggiungere anche anonymization
 bot_mods <- c("VisualMod", "AutoModerator")
 
 interactions = interactions[!(user %in% bot_mods | interacted_with %in% bot_mods), ]
