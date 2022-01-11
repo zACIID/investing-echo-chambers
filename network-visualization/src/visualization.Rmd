@@ -38,10 +38,11 @@ density.2d.palette <- "magma"
 density.2d.raster_points <- 250
 
 # Graph plots style
-edge.color <- "#cacac0"
+edge.color <- "#626466"
+edge.color.no <- NA
 
-# Dark red, red, light red, light green, green, dark green
-bear_bull_color_scale <- c("#8a0007", "#d9000c", "#fa6b73", "#add6a7", "#6db064", "#127a04")
+# Dark red, red, yellow-orange, green, dark green
+bear_bull_color_scale <- c("#8a0007", "#d9000c", "#ded83c", "#71cc2b", "#127a04")
 ```
 
 ```{r setup_img_dir}
@@ -101,20 +102,6 @@ head(text.sentiment)
 ```
 
 
-## Attempt to remove bots (TODO remove or add keywords like "Bot" o "Mod") to check inside the user (case sensitive check)
-
-```{r}
-# TODO Bot, Mod
-# TODO Cerca di aggiungere anche anonymization
-bot_mods <- c("VisualMod", "AutoModerator")
-
-interactions = interactions[!(user %in% bot_mods | interacted_with %in% bot_mods), ]
-dim(interactions)
-
-user.sentiment = user.sentiment[!(user %in% bot_mods), ]
-dim(user.sentiment)
-```
-
 ## Drop data that is either empty or na
 
 ```{r}
@@ -126,6 +113,51 @@ text.sentiment <- text.sentiment[(text != ""), ]
 
 user.sentiment <- na.omit(user.sentiment)
 user.sentiment <- user.sentiment[(user != ""), ]
+```
+
+
+## Attempt to remove spam (TO REMOVE)
+
+```{r}
+## numero determinato a seguito di un'analisi dei dati sullo spam. 
+## Sotto questo numero è possibile che siano inclusi anche utenti che hanno usato 
+## un paio di volte la stessa faccina o risposto con frasi tipo "thanks", "lol", "xd", etc.
+## 4 che tra l'altro è il 3° quartile in termini di spam_count
+#spam.threshold <- 4
+#
+## Compute a data.table containing the amount of spam texts that a user has created
+## This is done by first grouping by (user, text) and extracting tuples whose spam_count >= 2
+## (which means that a unique message was sent more than 1 time)
+#spam <- copy(interactions)
+#spam <- spam[, spam_count:=.N, by=.(user, text)]
+#spam <- spam[spam_count >= spam.threshold,]
+#
+## Then, such pairs are grouped by user, so that the the sum of spam texts
+## that a user has created can be effectively calculated
+#spam.by_user <- distinct(spam, user, text, .keep_all=TRUE)
+#spam.by_user <- spam.by_user[, spam_count:=lapply(.SD, sum), by=.(user), .SDcols = c("spam_count")]
+#summary(spam.by_user)
+#
+#```
+#
+#
+#```{r}
+# TODO Ora provo a vedere cosa succede se rimuovo interazioni, utenti e testi di utenti con spam_count >= 4.
+# rimuovo da interazioni dove creatore è utente spam, testi presenti tra i testi spam e poi data table utenti azzero sentiment.
+# Azzero il sentiment perché sono probabilmente dei bot che spammano però mi serve un dato
+# sul sentiment per poterli plottare
+#
+#spam.users <- spam.by_user[spam_count >= spam.threshold, user]
+#spam.users <- unique(spam.users)
+#
+#spam.texts <- spam[spam_count >= spam.threshold, text]
+#spam.texts <- unique(spam.texts)
+#```
+#
+#```{r}
+#interactions <- interactions[!(user %in% spam.users), ]
+#text.sentiment <- text.sentiment[!(text %in% spam.texts), ]
+#user.sentiment <- user.sentiment[user %in% spam.users, sentiment_score:=0]
 ```
 
 
@@ -185,17 +217,33 @@ ggsave(path=VISUALIZATIONS_DIR, filename="user-sentiment-distr.png", device=img.
 user_edges.dt <- interactions[, c("user", "interacted_with")]
 user.network <- graph_from_data_frame(user_edges.dt, directed=FALSE)
 
-# Remove multiple edges (one user may interact with another user more than once)
+# Remove multiple edges and loops (one user may interact with another user more than once)
 user.network <- simplify(user.network)
 head(E(user.network))
 ```
+
+### User sentiment
+
 ```{r}
 # Set sentiment attribute in the vertexes
+# The indexes have to be aligned with the sentiment data
 sentiment.with_order <- user.sentiment[as.character(user) %in% as.character(V(user.network)$name)]
 sentiment.with_order <- sentiment.with_order[order(match(user, V(user.network)$name))]
 set_idx <- V(user.network)[as.character(name) %in% as.character(sentiment.with_order$user)]
 user.network <- set_vertex_attr(user.network, "sentiment", index = set_idx, 
                                 sentiment.with_order$sentiment_score)
+```
+
+```{r}
+## Plot circular network to better understand how sentiment is distributed across vertexes
+#ggraph(user.network, layout="kk") + 
+#    geom_edge_link(color=edge.color) +
+#    geom_node_point(aes(color=sentiment)) +
+#    scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1))
+#
+## Save plot as image
+#ggsave(path=VISUALIZATIONS_DIR, filename="user-sentiment-test.png", device=img.type,
+#       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 
@@ -267,7 +315,14 @@ communities.network <- set_vertex_attr(communities.network, "size",index = set_i
 ggraph(communities.network, layout="kk") + 
     geom_edge_link(color=edge.color) +
     geom_node_point(aes(color=as.factor(name), size=size)) +
-    theme(legend.position="none")
+    ggtitle("Communities Network") +
+    theme_ft_rc(plot_title_size=titles.size, 
+                grid=FALSE) +
+    theme(legend.position="none",
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
 
 # Save plot as image
 ggsave(path=VISUALIZATIONS_DIR, filename="community-net.png", device=img.type,
@@ -292,7 +347,14 @@ communities.network <- set_vertex_attr(communities.network, "sentiment",
 ggraph(communities.network, layout="kk") + 
     geom_edge_link(color=edge.color) +
     geom_node_point(aes(color=sentiment, size=size)) +
-    scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1))
+    scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
+    ggtitle("Communities Network") +
+    theme_ft_rc(plot_title_size=titles.size, 
+                grid=FALSE) +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
 
 # Save plot as image
 ggsave(path=VISUALIZATIONS_DIR, filename="community-net-sentiment.png", device=img.type,
@@ -302,9 +364,16 @@ ggsave(path=VISUALIZATIONS_DIR, filename="community-net-sentiment.png", device=i
 ```{r}
 # Plot circular network to better understand how sentiment is distributed across vertexes
 ggraph(communities.network, layout="circle", order=order(V(communities.network)$sentiment)) + 
-    geom_edge_link(color=edge.color) +
+    geom_edge_link(color=edge.color.no) +
     geom_node_point(aes(color=sentiment, size=size)) +
-    scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1))
+    scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
+    ggtitle("Communities Network - Ordered by Sentiment") +
+    theme_ft_rc(plot_title_size=titles.size, 
+                grid=FALSE) +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())
 
 # Save plot as image
 ggsave(path=VISUALIZATIONS_DIR, filename="community-net-sentiment-circle.png", device=img.type,
@@ -313,19 +382,21 @@ ggsave(path=VISUALIZATIONS_DIR, filename="community-net-sentiment-circle.png", d
 
 ### Sentiment distribution
 
-Si vede dai colori poco accesi che sentiment è generalmente neutro
+Only 95th percentile communities are shown for clarity reasons: the total number of communities is several hundreds.
+We can see that sentiment is slightly bullish on average, since the colors range from orangish to almost dark green.
 
 ```{r}
 # Bar plot of community sizes, colored by sentiment
-min_size = 50
-ggplot(communities.dt[size > min_size,], aes(x=reorder(community, sentiment), 
+min_size.percentile <- 95
+min_size = floor(quantile(communities.dt$size, min_size.percentile / 100))
+ggplot(communities.dt[size >= min_size,], aes(x=reorder(community, sentiment), 
                                              y=size, fill=sentiment)) + 
     scale_fill_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
     geom_bar(stat="identity") +
-    theme_ft_rc() +
+    theme_ft_rc(grid=FALSE) +
     theme(axis.text.x=element_blank(),
           axis.ticks.x=element_blank()) +
-    labs(x=paste0("community (size greater than ", min_size, ")"), y="size")
+    labs(x=paste0("community (size >= ", min_size.percentile, "th percentile)"), y="size")
 
 # Save plot as image
 ggsave(path=VISUALIZATIONS_DIR, filename="community-size-sentiment.png", device=img.type,
@@ -365,15 +436,15 @@ user.network.data <- as_long_data_frame(user.network)
 setDT(user.network.data)
 
 user.nn_data <- rbind(user.network.data[from_name != to_name, 
-                                        .(nn_sentiment=mean(to_sentiment, na.rm=T), 
+                                        .(nn_sentiment=mean(to_sentiment, na.rm=TRUE), 
                                           sentiment=unique(from_sentiment)), 
                                         by=.(id=from_name)],
                       user.network.data[from_name != to_name,
-                                        .(nn_sentiment=mean(from_sentiment, na.rm=T),
+                                        .(nn_sentiment=mean(from_sentiment, na.rm=TRUE),
                                           sentiment=unique(to_sentiment)),
                                         by=.(id=to_name)])
 
-user.nn_data <- distinct(user.nn_data, id, .keep_all = T)
+user.nn_data <- distinct(user.nn_data, id, .keep_all=TRUE)
 
 # manipulate is needed for the "n" parameter, #points in the raster grid
 manipulate(
@@ -401,15 +472,15 @@ communities.network.data <- as_long_data_frame(communities.network)
 setDT(communities.network.data)
 
 comm.nn_data <- rbind(communities.network.data[from_name != to_name, 
-                                               .(nn_sentiment=mean(to_sentiment, na.rm=T), 
+                                               .(nn_sentiment=mean(to_sentiment, na.rm=TRUE), 
                                                  sentiment=unique(from_sentiment)), 
                                                by=.(id=from_name)],
                       communities.network.data[from_name != to_name,
-                                               .(nn_sentiment=mean(from_sentiment, na.rm=T),
+                                               .(nn_sentiment=mean(from_sentiment, na.rm=TRUE),
                                                  sentiment=unique(to_sentiment)),
                                                by=.(id=to_name)])
 
-comm.nn_data <- distinct(comm.nn_data, id, .keep_all = T)
+comm.nn_data <- distinct(comm.nn_data, id, .keep_all=TRUE)
 
 # manipulate is needed for the "n" parameter, #points in the raster grid
 manipulate(
