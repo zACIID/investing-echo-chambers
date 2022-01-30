@@ -41,8 +41,14 @@ density.2d.raster_points <- 250
 edge.color <- "#626466"
 edge.color.no <- NA
 
-# Dark red, red, yellow-orange, green, dark green
-bear_bull_color_scale <- c("#8a0007", "#d9000c", "#ded83c", "#71cc2b", "#127a04")
+# Sentiment color scale
+very_bearish <- "#8a0007" # dark red
+bearish <- "#d9000c" # red
+neutral <- "#ded83c" # yellow-orange
+bullish <- "#71cc2b" # green
+very_bullish <- "#127a04" # dark green
+
+bear_bull_color_scale <- c(very_bearish, bearish, neutral, bullish, very_bullish)
 ```
 
 ```{r setup_img_dir}
@@ -76,6 +82,10 @@ head(interactions)
 ```{r}
 # Col-names: text, sentiment_score
 text.sentiment <- fread("../datasets/text-sentiment.csv", sep=",", header=TRUE)
+
+# Rename sentiment to sentiment because it is cleaner to read
+setnames(text.sentiment, "sentiment_score", "sentiment")
+
 dim(text.sentiment)
 head(text.sentiment)
 ```
@@ -83,6 +93,10 @@ head(text.sentiment)
 ```{r}
 # Col-names: user, sentiment_score
 user.sentiment <- fread("../datasets/user-sentiment.csv", sep=",")
+
+# Rename sentiment to sentiment because it is cleaner to read
+setnames(user.sentiment, "sentiment_score", "sentiment")
+
 dim(user.sentiment)
 head(user.sentiment)
 ```
@@ -94,10 +108,10 @@ head(user.sentiment)
 ```{r}
 # Do it just for sentiment scores, since they will be plotted.
 # Must make sure they are of numeric type, else they will be plotted as discrete values
-user.sentiment <- user.sentiment[, sentiment_score:=as.double(sentiment_score)]
+user.sentiment <- user.sentiment[, sentiment:=as.double(sentiment)]
 head(user.sentiment)
 
-text.sentiment <- text.sentiment[, sentiment_score:=as.double(sentiment_score)]
+text.sentiment <- text.sentiment[, sentiment:=as.double(sentiment)]
 head(text.sentiment)
 ```
 
@@ -114,6 +128,27 @@ text.sentiment <- text.sentiment[(text != ""), ]
 user.sentiment <- na.omit(user.sentiment)
 user.sentiment <- user.sentiment[(user != ""), ]
 ```
+
+## Assign sentiment labels
+
+```{r}
+assign_sentiment_labels <- function(dt) {
+  dt[sentiment < -0.6, sentiment_label := "Very Bearish"]
+  dt[sentiment >= -0.6 & sentiment <= -0.2, sentiment_label := "Bearish"]
+  dt[sentiment > -0.2 & sentiment < 0.2, sentiment_label := "Neutral"]
+  dt[sentiment >= 0.2 & sentiment <= 0.6, sentiment_label := "Bullish"]
+  dt[sentiment > 0.6, sentiment_label := "Very Bullish"]
+  
+  dt[ , sentiment_label:=factor(dt$sentiment_label,
+                                levels=c("Very Bearish", "Bearish",
+                                         "Neutral", 
+                                         "Bullish", "Very Bullish"))]
+}
+
+assign_sentiment_labels(text.sentiment)
+assign_sentiment_labels(user.sentiment)
+```
+
 
 
 ## Attempt to remove spam (TO REMOVE)
@@ -157,7 +192,7 @@ user.sentiment <- user.sentiment[(user != ""), ]
 #```{r}
 #interactions <- interactions[!(user %in% spam.users), ]
 #text.sentiment <- text.sentiment[!(text %in% spam.texts), ]
-#user.sentiment <- user.sentiment[user %in% spam.users, sentiment_score:=0]
+#user.sentiment <- user.sentiment[user %in% spam.users, sentiment:=0]
 ```
 
 
@@ -166,11 +201,11 @@ user.sentiment <- user.sentiment[(user != ""), ]
 
 ```{r}
 # density plot
-ggplot(text.sentiment, aes(x=sentiment_score)) +
+ggplot(text.sentiment, aes(x=sentiment)) +
     geom_density(color=density.border, fill=density.fill, alpha=density.fill.alpha) +
     geom_histogram(aes(y=..density..), colour=density.hist.border, 
                    fill=density.hist.fill, alpha=density.hist.fill.alpha) +
-    geom_vline(aes(xintercept=mean(sentiment_score)), 
+    geom_vline(aes(xintercept=mean(sentiment)), 
                color=mean_line.color, linetype="dashed", size=1) +
     ggtitle("Sentiment distribution across text data") +
     theme_ft_rc(plot_title_size=titles.size) +
@@ -184,16 +219,29 @@ ggsave(path=VISUALIZATIONS_DIR, filename="text-sentiment-distr.png", device=img.
 ```
 
 
+```{r}
+ggplot(text.sentiment, aes(x=sentiment_label, fill=sentiment_label)) +  
+  geom_bar(aes(y = (..count..)/sum(..count..) * 100)) +
+  scale_fill_manual(values=bear_bull_color_scale) +
+  ggtitle("Sentiment distribution across texts") +
+  theme_ft_rc(plot_title_size=titles.size) +
+  theme(legend.position="none") +
+  labs(x="Sentiment", y="Percentage of users [%]")
+```
+
+
 
 # Distribution of user sentiment
 
+## Density plot
+
 ```{r}
 # density plot
-ggplot(user.sentiment, aes(x=sentiment_score)) +
+ggplot(user.sentiment, aes(x=sentiment)) +
     geom_density(color=density.border, fill=density.fill, alpha=density.fill.alpha) +
     geom_histogram(aes(y=..density..), colour=density.hist.border, 
                    fill=density.hist.fill, alpha=density.hist.fill.alpha) +
-    geom_vline(aes(xintercept=mean(sentiment_score)), 
+    geom_vline(aes(xintercept=mean(sentiment)), 
                color=mean_line.color, linetype="dashed", size=1) +
     ggtitle("Sentiment distribution across users") +
     theme_ft_rc(plot_title_size=titles.size) +
@@ -204,6 +252,17 @@ ggplot(user.sentiment, aes(x=sentiment_score)) +
 # Save plot as image
 ggsave(path=VISUALIZATIONS_DIR, filename="user-sentiment-distr.png", device=img.type,
        width=img.width, height=img.height, dpi=img.dpi)
+```
+
+
+```{r}
+ggplot(user.sentiment, aes(x=sentiment_label, fill=sentiment_label)) +  
+  geom_bar(aes(y = (..count..)/sum(..count..) * 100)) +
+  scale_fill_manual(values=bear_bull_color_scale) +
+  ggtitle("Sentiment distribution across users") +
+  theme_ft_rc(plot_title_size=titles.size) +
+  theme(legend.position="none") +
+  labs(x="Sentiment", y="Percentage of users [%]")
 ```
 
 
@@ -222,7 +281,17 @@ user.network <- simplify(user.network)
 head(E(user.network))
 ```
 
-### User sentiment
+### Calculate Network Sparsity
+
+```{r}
+edge_number <- length(E(user.network))
+vertex_number <- length(V(user.network))
+user.network.sparsity <- edge_number / (vertex_number * (vertex_number - 1))
+
+user.network.sparsity
+```
+
+### Adding user sentiment
 
 ```{r}
 # Set sentiment attribute in the vertexes
@@ -231,10 +300,11 @@ sentiment.with_order <- user.sentiment[as.character(user) %in% as.character(V(us
 sentiment.with_order <- sentiment.with_order[order(match(user, V(user.network)$name))]
 set_idx <- V(user.network)[as.character(name) %in% as.character(sentiment.with_order$user)]
 user.network <- set_vertex_attr(user.network, "sentiment", index = set_idx, 
-                                sentiment.with_order$sentiment_score)
+                                sentiment.with_order$sentiment)
 ```
 
 ```{r}
+# TODO remove
 ## Plot circular network to better understand how sentiment is distributed across vertexes
 #ggraph(user.network, layout="kk") + 
 #    geom_edge_link(color=edge.color) +
@@ -288,9 +358,13 @@ colnames(community_edges.dt) <- c("from_community", "to_community")
 # Create data.table pairing communities with their size and sentiment
 communities.dt <- vertex.dt[, .(size=.N, sentiment=mean(sentiment)), by=c("community")]
 communities.dt <- unique(communities.dt[, c("community", "size", "sentiment")])
+
+# Assign sentiment labels so that the pie chart is possible
+assign_sentiment_labels(communities.dt)
+head(communities.dt)
 ```
 
-### Create and plot communities network graph
+### Create network graph
 
 ```{r}
 # Create communities graph
@@ -306,28 +380,10 @@ comm.with_order <- comm.with_order[order(match(community, V(communities.network)
 
 # Assign size and sentiment attributes to network vertexes
 set_idx <- V(communities.network)[as.character(name) %in% as.character(comm.with_order$community)]
-communities.network <- set_vertex_attr(communities.network, "size",index = set_idx, 
+communities.network <- set_vertex_attr(communities.network, "size", index = set_idx, 
                                        comm.with_order$size)
 ```
 
-```{r}
-# Community network plot
-ggraph(communities.network, layout="kk") + 
-    geom_edge_link(color=edge.color) +
-    geom_node_point(aes(color=as.factor(name), size=size)) +
-    ggtitle("Communities Network") +
-    theme_ft_rc(plot_title_size=titles.size, 
-                grid=FALSE) +
-    theme(legend.position="none",
-          axis.text.y=element_blank(),
-          axis.ticks.y=element_blank(),
-          axis.text.x=element_blank(),
-          axis.ticks.x=element_blank())
-
-# Save plot as image
-ggsave(path=VISUALIZATIONS_DIR, filename="community-net.png", device=img.type,
-       width=img.width, height=img.height, dpi=img.dpi)
-```
 
 
 ## Communities Sentiment
@@ -344,7 +400,7 @@ communities.network <- set_vertex_attr(communities.network, "sentiment",
 
 ```{r}
 # Plot network with sentiment information
-ggraph(communities.network, layout="kk") + 
+ggraph(communities.network, layout="kk") +
     geom_edge_link(color=edge.color) +
     geom_node_point(aes(color=sentiment, size=size)) +
     scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
@@ -364,7 +420,7 @@ ggsave(path=VISUALIZATIONS_DIR, filename="community-net-sentiment.png", device=i
 ```{r}
 # Plot circular network to better understand how sentiment is distributed across vertexes
 ggraph(communities.network, layout="circle", order=order(V(communities.network)$sentiment)) + 
-    geom_edge_link(color=edge.color.no) +
+    geom_edge_link(color=edge.color) +
     geom_node_point(aes(color=sentiment, size=size)) +
     scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
     ggtitle("Communities Network - Ordered by Sentiment") +
@@ -499,5 +555,56 @@ manipulate(
 ggsave(path=VISUALIZATIONS_DIR, filename="community-nn-sentiment.png", device=img.type,
        width=img.width, height=img.height, dpi=img.dpi)
 ```
+
+# Chord Diagram
+
+```{r}
+# Remove self loops - this means that isolated communites will be removed
+community.adj_list <- community_edges.dt[from_community != to_community, ]
+community.adj_list[, strength:=.N, by=.(from_community, to_community)]
+community.adj_list <- distinct(community.adj_list, from_community, to_community, .keep_all=TRUE)
+
+dim(community.adj_list)
+```
+
+
+```{r}
+# Get the color vector to use in the chord diagram
+# Assign color to each community based on sentiment
+get_sentiment_color <- function(sentiment_lbl) {
+  return(
+    switch(sentiment_lbl,
+           "Very Bearish"=very_bearish,
+           "Bearish"=bearish,
+           "Neutral"=neutral,
+           "Bullish"=bullish,
+           "Very Bullish"=very_bullish)
+  )
+}
+
+get_sentiment_color <- Vectorize(get_sentiment_color)
+sentiment_colors <- get_sentiment_color(communities.dt$sentiment_label)
+communities.dt[, color:=sentiment_colors]
+
+chord_communities <-  communities.dt[community %in% community.adj_list$from_community 
+                                | community %in% community.adj_list$to_community, .(community, sentiment, color)]
+
+library(circlize)
+
+png(filename="../visualizations/community-chord.png", width=3000, height=3000)
+
+circos.clear()
+par(bg="#242f52")
+chordDiagram(
+  community.adj_list,
+  annotationTrack = "grid",
+  grid.col=as.vector(chord_communities$color)
+)
+
+dev.off()
+```
+
+
+
 
 
