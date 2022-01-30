@@ -1,5 +1,4 @@
 import glob
-
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -7,10 +6,14 @@ from src.interactions import SubmissionsInteractionFetcher, get_interaction_df
 from src.sentiment import get_user_sentiment_df, get_text_sentiment_df
 from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
-# last two weeks of december
+
 ENDING_DATE = datetime(year=2021, month=12, day=31)
-STARTING_DATE = datetime(year=2021, month=12, day=17)
+STARTING_DATE = datetime(year=2021, month=11, day=16)
 DAYS_INTERVAL = (ENDING_DATE - STARTING_DATE).days
+
+# Keywords to search inside submissions (title and selftext)
+# Must be surrounded by parenthesis
+KEYWORDS = "|".join(["(stocks)", "(markets)", "(stock market)", "(investing)", "(investment)"])
 
 # Output directories
 OUT_FOLDER = "./output"
@@ -33,8 +36,10 @@ def main():
         from_date = STARTING_DATE + timedelta(days=day - 1)
         to_date = STARTING_DATE + timedelta(days=day)
 
+        # Look for keywords in the submission's text and title
         search_params = {
-            "q": "(stocks)|(markets)|(stock market)|(investing)|(investment)",
+            "title": KEYWORDS,
+            "selftext": KEYWORDS,
             "after": int(from_date.timestamp()),
             "before": int(to_date.timestamp()),
             "limit": None
@@ -45,11 +50,11 @@ def main():
 
         # Fetch and save comment data
         print(f"--------- {day_info} Fetching interactions... ---------")
-        wsb_interactions = fetcher.fetch_interactions()
+        interactions = fetcher.fetch_interactions()
         print(f"--------- {day_info} interactions fetched ---------")
 
         # Create and save interactions dataframe
-        interactions_df = get_interaction_df(interactions=wsb_interactions,
+        interactions_df = get_interaction_df(interactions=interactions,
                                              user_out_col=USER_COL,
                                              text_out_col=TEXT_COL,
                                              interacted_with_out_col=INTERACTED_WITH_COL)
@@ -62,7 +67,7 @@ def main():
 
         # Calculate and save text sentiment data
         print(f"--------- {day_info} Calculating text sentiment... ---------")
-        text_sentiment_df = get_text_sentiment_df(interactions=wsb_interactions,
+        text_sentiment_df = get_text_sentiment_df(interactions=interactions,
                                                   text_out_col=TEXT_COL,
                                                   sentiment_out_col=SENTIMENT_COL)
         if len(text_sentiment_df) > 0:
@@ -74,7 +79,7 @@ def main():
 
         # Calculate and save user sentiment data
         print(f"--------- {day_info} Calculating users' sentiment... ---------")
-        user_sentiment_df = get_user_sentiment_df(interactions=wsb_interactions,
+        user_sentiment_df = get_user_sentiment_df(interactions=interactions,
                                                   user_out_col=USER_COL,
                                                   sentiment_out_col=SENTIMENT_COL)
         if len(user_sentiment_df) > 0:

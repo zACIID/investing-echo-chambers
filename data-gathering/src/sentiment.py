@@ -62,10 +62,6 @@ def get_text_sentiment_df(interactions: list[Interaction],
     }
     text_df = pd.DataFrame(data=user_data)
 
-    # Performance optimization: some rows might be duplicated, for
-    # example if a bot posts the same text over and over
-    text_df = text_df.drop_duplicates()
-
     # https://github.com/cjhutto/vaderSentiment#resources-and-dataset-descriptions
     # positive sentiment: compound score >= 0.05
     # neutral sentiment: (compound score > -0.05) and (compound score < 0.05)

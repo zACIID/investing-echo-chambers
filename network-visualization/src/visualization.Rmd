@@ -120,13 +120,17 @@ head(text.sentiment)
 
 ```{r}
 interactions <- na.omit(interactions)
-interactions <- interactions[(user != "" & interacted_with != ""), ]
+interactions <- interactions[(user != "" & interacted_with != "" & text != ""), ]
 
 text.sentiment <- na.omit(text.sentiment)
 text.sentiment <- text.sentiment[(text != ""), ]
 
 user.sentiment <- na.omit(user.sentiment)
 user.sentiment <- user.sentiment[(user != ""), ]
+
+dim(interactions)
+dim(text.sentiment)
+dim(user.sentiment)
 ```
 
 ## Assign sentiment labels
@@ -263,6 +267,10 @@ ggplot(user.sentiment, aes(x=sentiment_label, fill=sentiment_label)) +
   theme_ft_rc(plot_title_size=titles.size) +
   theme(legend.position="none") +
   labs(x="Sentiment", y="Percentage of users [%]")
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="user-sentiment-lbl-distr.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 
@@ -327,7 +335,7 @@ I chose multilevel because it is the fastest and I have limited hardware.
 ```{r}
 # Remove isolated vertices to speed up the process and not clutter the network
 # with meaningless communities
-user.isolated <- which(degree(user.network)==0)
+user.isolated <- which(igraph::degree(user.network) == 0)
 user.network <- delete.vertices(user.network, user.isolated)
 
 communities <- multilevel.community(user.network)
@@ -445,7 +453,7 @@ We can see that sentiment is slightly bullish on average, since the colors range
 # Bar plot of community sizes, colored by sentiment
 min_size.percentile <- 95
 min_size = floor(quantile(communities.dt$size, min_size.percentile / 100))
-ggplot(communities.dt[size >= min_size,], aes(x=reorder(community, sentiment), 
+ggplot(communities.dt[size >= min_size, ], aes(x=reorder(community, sentiment), 
                                              y=size, fill=sentiment)) + 
     scale_fill_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
     geom_bar(stat="identity") +
@@ -481,6 +489,19 @@ ggsave(path=VISUALIZATIONS_DIR, filename="community-sentiment-distr.png", device
        width=img.width, height=img.height, dpi=img.dpi)
 ```
 
+```{r}
+ggplot(communities.dt, aes(x=sentiment_label, fill=sentiment_label)) +  
+  geom_bar(aes(y = (..count..)/sum(..count..) * 100)) +
+  scale_fill_manual(values=bear_bull_color_scale) +
+  ggtitle("Sentiment distribution across communities") +
+  theme_ft_rc(plot_title_size=titles.size) +
+  theme(legend.position="none") +
+  labs(x="Sentiment", y="Percentage of communities [%]")
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="community-sentiment-lbl-distr.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
+```
 
 
 # Visualizing Echo Chambers
@@ -560,6 +581,8 @@ ggsave(path=VISUALIZATIONS_DIR, filename="community-nn-sentiment.png", device=im
 
 ```{r}
 # Remove self loops - this means that isolated communites will be removed
+# A chord diagram is in fact useful to see relations between sectors, 
+# so isolated sectors are better left off
 community.adj_list <- community_edges.dt[from_community != to_community, ]
 community.adj_list[, strength:=.N, by=.(from_community, to_community)]
 community.adj_list <- distinct(community.adj_list, from_community, to_community, .keep_all=TRUE)
@@ -573,7 +596,7 @@ dim(community.adj_list)
 # Assign color to each community based on sentiment
 get_sentiment_color <- function(sentiment_lbl) {
   return(
-    switch(sentiment_lbl,
+    switch(as.character(sentiment_lbl),
            "Very Bearish"=very_bearish,
            "Bearish"=bearish,
            "Neutral"=neutral,
@@ -588,28 +611,58 @@ communities.dt[, color:=sentiment_colors]
 
 chord_communities <-  communities.dt[community %in% community.adj_list$from_community 
                                 | community %in% community.adj_list$to_community, .(community, sentiment, color)]
+
+# Ordering is important, e.g. for colors, so that they are correcctly assigned in the chord diagram
+# Data needs to be aligned with the first column of the adjacence list, which is the "from" column
+chord_communities.ordered <- chord_communities[order(match(community, community.adj_list$from_community)), ]
 ```
 
 ```{r}
-# TODO provare a mostrare solo community sopra il 95esimo percentile magari?
-# perché plottare solo community non isolate mi sembra sbagliato 
-# perché potrebbe eslcudere community isolate ma grandi
-
 library(circlize)
 
-png(filename="../visualizations/community-chord.png", width=3000, height=3000)
+png(filename=paste0(VISUALIZATIONS_DIR, "community-chord.png"), width=3000, height=3000)
 
 circos.clear()
 par(bg="#1e222b")
-chordDiagram(
+cd <- chordDiagram(
   community.adj_list,
   annotationTrack = "grid",
-  grid.col=as.vector(chord_communities$color)
+  grid.col=as.vector(chord_communities.ordered$color)
 )
 
 dev.off()
 ```
 
+
+# Data summary
+
+## Interaction Data
+
+```{r}
+summary(interactions)
+dim(interactions)
+```
+
+## Text Data
+
+```{r}
+summary(text.sentiment)
+dim(text.sentiment)
+```
+
+## User Data
+
+```{r}
+summary(user.sentiment)
+dim(user.sentiment)
+```
+
+## Community Detection Data
+
+```{r}
+summary(communities.dt)
+dim(communities.dt)
+```
 
 
 
