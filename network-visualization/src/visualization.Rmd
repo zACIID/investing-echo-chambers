@@ -588,13 +588,19 @@ communities.dt[, color:=sentiment_colors]
 
 chord_communities <-  communities.dt[community %in% community.adj_list$from_community 
                                 | community %in% community.adj_list$to_community, .(community, sentiment, color)]
+```
+
+```{r}
+# TODO provare a mostrare solo community sopra il 95esimo percentile magari?
+# perché plottare solo community non isolate mi sembra sbagliato 
+# perché potrebbe eslcudere community isolate ma grandi
 
 library(circlize)
 
 png(filename="../visualizations/community-chord.png", width=3000, height=3000)
 
 circos.clear()
-par(bg="#242f52")
+par(bg="#1e222b")
 chordDiagram(
   community.adj_list,
   annotationTrack = "grid",
@@ -603,7 +609,6 @@ chordDiagram(
 
 dev.off()
 ```
-
 
 
 
