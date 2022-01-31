@@ -31,7 +31,8 @@ density.hist.fill <- "white"
 density.hist.fill.alpha <- 0.2
 
 mean_line.color <- "darkred"
-titles.size <- 15
+titles.size <- 23
+label.font_size <- 17
 
 # 2d Density raster style
 density.2d.palette <- "magma"
@@ -155,52 +156,6 @@ assign_sentiment_labels(user.sentiment)
 
 
 
-## Attempt to remove spam (TO REMOVE)
-
-```{r}
-## numero determinato a seguito di un'analisi dei dati sullo spam. 
-## Sotto questo numero è possibile che siano inclusi anche utenti che hanno usato 
-## un paio di volte la stessa faccina o risposto con frasi tipo "thanks", "lol", "xd", etc.
-## 4 che tra l'altro è il 3° quartile in termini di spam_count
-#spam.threshold <- 4
-#
-## Compute a data.table containing the amount of spam texts that a user has created
-## This is done by first grouping by (user, text) and extracting tuples whose spam_count >= 2
-## (which means that a unique message was sent more than 1 time)
-#spam <- copy(interactions)
-#spam <- spam[, spam_count:=.N, by=.(user, text)]
-#spam <- spam[spam_count >= spam.threshold,]
-#
-## Then, such pairs are grouped by user, so that the the sum of spam texts
-## that a user has created can be effectively calculated
-#spam.by_user <- distinct(spam, user, text, .keep_all=TRUE)
-#spam.by_user <- spam.by_user[, spam_count:=lapply(.SD, sum), by=.(user), .SDcols = c("spam_count")]
-#summary(spam.by_user)
-#
-#```
-#
-#
-#```{r}
-# TODO Ora provo a vedere cosa succede se rimuovo interazioni, utenti e testi di utenti con spam_count >= 4.
-# rimuovo da interazioni dove creatore è utente spam, testi presenti tra i testi spam e poi data table utenti azzero sentiment.
-# Azzero il sentiment perché sono probabilmente dei bot che spammano però mi serve un dato
-# sul sentiment per poterli plottare
-#
-#spam.users <- spam.by_user[spam_count >= spam.threshold, user]
-#spam.users <- unique(spam.users)
-#
-#spam.texts <- spam[spam_count >= spam.threshold, text]
-#spam.texts <- unique(spam.texts)
-#```
-#
-#```{r}
-#interactions <- interactions[!(user %in% spam.users), ]
-#text.sentiment <- text.sentiment[!(text %in% spam.texts), ]
-#user.sentiment <- user.sentiment[user %in% spam.users, sentiment:=0]
-```
-
-
-
 # Distribution of text sentiment 
 
 ```{r}
@@ -214,7 +169,9 @@ ggplot(text.sentiment, aes(x=sentiment)) +
     ggtitle("Sentiment distribution across text data") +
     theme_ft_rc(plot_title_size=titles.size) +
     theme(axis.text.y=element_blank(),
-          axis.ticks.y=element_blank()) +
+          axis.ticks.y=element_blank(),
+          axis.title.x=element_text(size=label.font_size),
+          axis.title.y=element_text(size=label.font_size)) +
     labs(x="sentiment", y="density")
 
 # Save plot as image
@@ -229,8 +186,14 @@ ggplot(text.sentiment, aes(x=sentiment_label, fill=sentiment_label)) +
   scale_fill_manual(values=bear_bull_color_scale) +
   ggtitle("Sentiment distribution across texts") +
   theme_ft_rc(plot_title_size=titles.size) +
-  theme(legend.position="none") +
-  labs(x="Sentiment", y="Percentage of users [%]")
+  theme(legend.position="none",
+        axis.title.x=element_text(size=label.font_size),
+        axis.title.y=element_text(size=label.font_size)) +
+  labs(x="sentiment", y="percentage of texts [%]")
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="text-sentiment-lbl-distr.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
 ```
 
 
@@ -250,7 +213,9 @@ ggplot(user.sentiment, aes(x=sentiment)) +
     ggtitle("Sentiment distribution across users") +
     theme_ft_rc(plot_title_size=titles.size) +
     theme(axis.text.y=element_blank(),
-          axis.ticks.y=element_blank()) +
+          axis.ticks.y=element_blank(),
+          axis.title.x=element_text(size=label.font_size),
+          axis.title.y=element_text(size=label.font_size)) +
     labs(x="sentiment", y="density")
 
 # Save plot as image
@@ -265,8 +230,10 @@ ggplot(user.sentiment, aes(x=sentiment_label, fill=sentiment_label)) +
   scale_fill_manual(values=bear_bull_color_scale) +
   ggtitle("Sentiment distribution across users") +
   theme_ft_rc(plot_title_size=titles.size) +
-  theme(legend.position="none") +
-  labs(x="Sentiment", y="Percentage of users [%]")
+  theme(legend.position="none",
+        axis.title.x=element_text(size=label.font_size),
+        axis.title.y=element_text(size=label.font_size)) +
+  labs(x="sentiment", y="percentage of users [%]")
 
 # Save plot as image
 ggsave(path=VISUALIZATIONS_DIR, filename="user-sentiment-lbl-distr.png", device=img.type,
@@ -311,18 +278,6 @@ user.network <- set_vertex_attr(user.network, "sentiment", index = set_idx,
                                 sentiment.with_order$sentiment)
 ```
 
-```{r}
-# TODO remove
-## Plot circular network to better understand how sentiment is distributed across vertexes
-#ggraph(user.network, layout="kk") + 
-#    geom_edge_link(color=edge.color) +
-#    geom_node_point(aes(color=sentiment)) +
-#    scale_colour_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1))
-#
-## Save plot as image
-#ggsave(path=VISUALIZATIONS_DIR, filename="user-sentiment-test.png", device=img.type,
-#       width=img.width, height=img.height, dpi=img.dpi)
-```
 
 
 ## Community Detection
@@ -372,6 +327,32 @@ assign_sentiment_labels(communities.dt)
 head(communities.dt)
 ```
 
+### Size Distribution
+
+```{r}
+# density plot
+ggplot(communities.dt, aes(x=log10(size))) +
+    geom_density(color=density.border, fill=density.fill, alpha=density.fill.alpha) +
+    geom_histogram(aes(y=..density..), colour=density.hist.border, 
+                   fill=density.hist.fill, alpha=density.hist.fill.alpha,
+                   bins=20) +
+    geom_vline(aes(xintercept=mean(log10(size))), 
+               color=mean_line.color, linetype="dashed", size=1) +
+    ggtitle("Size distribution across communities") +
+    theme_ft_rc(plot_title_size=titles.size) +
+    scale_x_continuous(breaks=round(seq(0, max(log10(communities.dt$size))+0.25, by=0.5), 1)) +
+    theme(axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          axis.title.x=element_text(size=label.font_size),
+          axis.title.y=element_text(size=label.font_size)) +
+    labs(x="log-size", y="density")
+
+# Save plot as image
+ggsave(path=VISUALIZATIONS_DIR, filename="community-size-distr.png", device=img.type,
+       width=img.width, height=img.height, dpi=img.dpi)
+```
+
+
 ### Create network graph
 
 ```{r}
@@ -415,10 +396,10 @@ ggraph(communities.network, layout="kk") +
     ggtitle("Communities Network") +
     theme_ft_rc(plot_title_size=titles.size, 
                 grid=FALSE) +
-    theme(axis.text.y=element_blank(),
-          axis.ticks.y=element_blank(),
-          axis.text.x=element_blank(),
-          axis.ticks.x=element_blank())
+    theme(axis.ticks.y=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.x=element_text(size=label.font_size),
+          axis.title.y=element_text(size=label.font_size))
 
 # Save plot as image
 ggsave(path=VISUALIZATIONS_DIR, filename="community-net-sentiment.png", device=img.type,
@@ -434,10 +415,10 @@ ggraph(communities.network, layout="circle", order=order(V(communities.network)$
     ggtitle("Communities Network - Ordered by Sentiment") +
     theme_ft_rc(plot_title_size=titles.size, 
                 grid=FALSE) +
-    theme(axis.text.y=element_blank(),
-          axis.ticks.y=element_blank(),
-          axis.text.x=element_blank(),
-          axis.ticks.x=element_blank())
+    theme(axis.ticks.y=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.x=element_text(size=label.font_size),
+          axis.title.y=element_text(size=label.font_size))
 
 # Save plot as image
 ggsave(path=VISUALIZATIONS_DIR, filename="community-net-sentiment-circle.png", device=img.type,
@@ -457,9 +438,13 @@ ggplot(communities.dt[size >= min_size, ], aes(x=reorder(community, sentiment),
                                              y=size, fill=sentiment)) + 
     scale_fill_gradientn(colors=bear_bull_color_scale, limits=c(-1, 1)) +
     geom_bar(stat="identity") +
-    theme_ft_rc(grid=FALSE) +
+    scale_y_continuous(breaks=round(seq(0, max(communities.dt$size)+100, by=1000), 1)) +
+    ggtitle(paste0(min_size.percentile, "th percentile ", "Communities - Ordered by sentiment")) +
+    theme_ft_rc(plot_title_size=titles.size) +
     theme(axis.text.x=element_blank(),
-          axis.ticks.x=element_blank()) +
+          axis.ticks.x=element_blank(),
+          axis.title.x=element_text(size=label.font_size),
+          axis.title.y=element_text(size=label.font_size)) +
     labs(x=paste0("community (size >= ", min_size.percentile, "th percentile)"), y="size")
 
 # Save plot as image
@@ -481,7 +466,9 @@ ggplot(communities.dt, aes(x=sentiment)) +
     ggtitle("Sentiment distribution across communities") +
     theme_ft_rc(plot_title_size=titles.size) +
     theme(axis.text.y=element_blank(),
-          axis.ticks.y=element_blank()) +
+          axis.ticks.y=element_blank(),
+          axis.title.x=element_text(size=label.font_size),
+          axis.title.y=element_text(size=label.font_size)) +
     labs(x="sentiment", y="density")
 
 # Save plot as image
@@ -495,8 +482,10 @@ ggplot(communities.dt, aes(x=sentiment_label, fill=sentiment_label)) +
   scale_fill_manual(values=bear_bull_color_scale) +
   ggtitle("Sentiment distribution across communities") +
   theme_ft_rc(plot_title_size=titles.size) +
-  theme(legend.position="none") +
-  labs(x="Sentiment", y="Percentage of communities [%]")
+  theme(legend.position="none",
+        axis.title.x=element_text(size=label.font_size),
+        axis.title.y=element_text(size=label.font_size)) +
+  labs(x="sentiment", y="percentage of communities [%]")
 
 # Save plot as image
 ggsave(path=VISUALIZATIONS_DIR, filename="community-sentiment-lbl-distr.png", device=img.type,
@@ -532,7 +521,9 @@ manipulate(
   lims(x=c(-1, 1), y=c(-1, 1)) +
   scale_fill_viridis(option=density.2d.palette) +
   theme_classic() +
-  theme(legend.position="none") +
+  theme(legend.position="none",
+        axis.title.x=element_text(size=label.font_size),
+        axis.title.y=element_text(size=label.font_size)) +
   labs(x="user sentiment", y="neighborhood sentiment")
 )
 
@@ -568,7 +559,9 @@ manipulate(
   lims(x=c(-1, 1), y=c(-1, 1)) +
   scale_fill_viridis(option=density.2d.palette) +
   theme_classic() +
-  theme(legend.position="none") +
+  theme(legend.position="none",
+        axis.title.x=element_text(size=label.font_size),
+        axis.title.y=element_text(size=label.font_size)) +
   labs(x="community sentiment", y="neighborhood sentiment")
 )
 
@@ -632,6 +625,7 @@ cd <- chordDiagram(
 
 dev.off()
 ```
+
 
 
 # Data summary
