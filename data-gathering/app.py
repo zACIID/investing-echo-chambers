@@ -8,7 +8,7 @@ from src.constants import USER_COL, TEXT_COL, INTERACTED_WITH_COL, SENTIMENT_COL
 
 
 ENDING_DATE = datetime(year=2021, month=12, day=31)
-STARTING_DATE = datetime(year=2021, month=11, day=16)
+STARTING_DATE = datetime(year=2021, month=11, day=15)
 DAYS_INTERVAL = (ENDING_DATE - STARTING_DATE).days
 
 # Keywords to search inside submissions (title and selftext)
