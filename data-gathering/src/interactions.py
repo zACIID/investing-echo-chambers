@@ -33,7 +33,7 @@ class LoggingRequestor(Requestor):
         return response
 
 
-class Interaction(object):
+class Interaction(ABC):
     """
     Abstract class representing an interaction between two users
     """
