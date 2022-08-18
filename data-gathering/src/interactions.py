@@ -1,12 +1,15 @@
 import time
-import pandas as pd
+from abc import ABC
+from datetime import datetime
 from typing import Union
 from collections import Generator
+
+import pandas as pd
 from praw import Reddit
 from praw.models import Submission, Comment
 from prawcore import Requestor
 from psaw import PushshiftAPI
-from datetime import datetime
+
 from src.constants import COMMENT_PREFIX, USER_PREFIX, SUBMISSION_PREFIX
 
 
@@ -17,6 +20,7 @@ class LoggingRequestor(Requestor):
         """
         Wrap the request method with logging capabilities.
         """
+
         response = super().request(*args, **kwargs)
 
         print(f"Response from: {response.url}")
@@ -33,6 +37,7 @@ class Interaction(object):
     """
     Abstract class representing an interaction between two users
     """
+
     def __init__(self, user: str, text_data: str, interacted_with: str):
         self.user = user
         self.text_data = text_data
@@ -47,6 +52,7 @@ class SubmissionInteraction(Interaction):
     (author == responding_to)
     Also, text_data is made of both the title and the submission text.
     """
+
     def __init__(self, submission: Submission):
         # Convert the author to string to get the username
         # without activating the lazy Redditor instance and causing
@@ -62,6 +68,7 @@ class CommentInteraction(Interaction):
     """
     Class that represents the network data gathered from a reddit submission
     """
+
     def __init__(self, comment: Comment, parent: Union[Comment, Submission]):
         # Convert the author to string to get the username
         # without activating the lazy Redditor instance and causing
@@ -110,6 +117,7 @@ def _remove_kind_prefixes(obj_id: str) -> str:
     :param obj_id:
     :return: id string, net of prefixes
     """
+
     actual_id = obj_id.replace(COMMENT_PREFIX, "")
     actual_id = actual_id.replace(USER_PREFIX, "")
     actual_id = actual_id.replace(SUBMISSION_PREFIX, "")
@@ -121,9 +129,11 @@ def _get_author_username_safe(praw_obj: Union[Comment, Submission]) -> str:
     """
     Function that handles the case where the author of something (comment, submission, etc.)
     has been deleted, in which case it is represented as None by PRAW.
+
     :param praw_obj: praw object representing either comment or submission
     :return: author's username or "N/A"
     """
+
     if praw_obj.author is None:
         return "N/A"
     else:
@@ -137,6 +147,7 @@ class SubmissionsInteractionFetcher(object):
     Such network is made of interactions between users,
     which essentially are comments/submissions and relative responses.
     """
+
     def __init__(self, ini_site_name: str = "DEFAULT",
                  replace_more_minimum: int = 30,
                  logger: callable(str) = None, **search_params):
@@ -157,6 +168,7 @@ class SubmissionsInteractionFetcher(object):
             https://melaniewalsh.github.io/Intro-Cultural-Analytics/04-Data-Collection/14-Reddit-Data.html
             https://towardsdatascience.com/how-to-collect-a-reddit-dataset-c369de539114
         """
+
         self._reddit = Reddit(site_name=ini_site_name, requestor_class=LoggingRequestor)
         self._psaw = PushshiftAPI(r=self._reddit)
 
@@ -169,6 +181,7 @@ class SubmissionsInteractionFetcher(object):
         Fetches the network data for the subreddit specified when creating this instance.
         :return: list of network data
         """
+
         fetched_data: list[Interaction] = []
         fetched_counter = 0
         submission_iterator = self._get_submission_generator()
@@ -185,6 +198,7 @@ class SubmissionsInteractionFetcher(object):
     def _get_submission_generator(self) -> Generator[Submission]:
         """
         Returns a generator of submissions based on this instance's search parameters.
+
         :return: submission generator
         """
 
@@ -216,9 +230,11 @@ class SubmissionsInteractionFetcher(object):
     def _fetch_interactions_from_submission(self, submission: Submission) -> list[Interaction]:
         """
         Fetches the network interaction data from the given submission
+
         :param submission: reddit submission to extract interactions from
         :return:
         """
+
         interactions: list[Interaction] = []
 
         sub_interaction = SubmissionInteraction(submission)
@@ -271,8 +287,10 @@ class SubmissionsInteractionFetcher(object):
     def _log_message(self, msg: str):
         """
         Logs a message using the logger provided to this instance, if any.
+
         :param msg: message to log
         """
+
         if self._logger is not None:
             self._logger(msg)
 
@@ -282,6 +300,7 @@ def get_interaction_df(interactions: list[Interaction],
                        interacted_with_out_col: str) -> pd.DataFrame:
     """
     Returns a dataframe based on the provided interactions.
+
     :param interactions: list of user interactions
     :param user_out_col: name of the column, in the output dataframe,
         that contains all the authors of the fetched text
@@ -311,6 +330,7 @@ def get_interactions_from_df(interactions_df: pd.DataFrame,
                              interacted_with_col: str) -> list[Interaction]:
     """
     Get a list of interaction objects from an interaction dataframe.
+
     :param interactions_df: interactions dataframe
     :param user_col: name of the user column (first) in the provided dataframe
     :param text_col: name of the text column (second)  in the provided dataframe
@@ -318,6 +338,7 @@ def get_interactions_from_df(interactions_df: pd.DataFrame,
         in the provided dataframe
     :return: interaction objects list
     """
+
     interactions = []
     for row in interactions_df.itertuples():
         user = getattr(row, user_col)

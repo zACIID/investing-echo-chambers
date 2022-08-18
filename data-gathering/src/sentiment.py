@@ -1,7 +1,9 @@
 import re
+
 import pandas as pd
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
 from src.interactions import Interaction
 
 # Needed for vader sentiment analyzer
